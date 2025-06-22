@@ -10,6 +10,9 @@
 #include <future>
 #include <iostream>
 
+namespace tcs {
+namespace pool {
+
 class ThreadPool {
 public:
     explicit ThreadPool(std::size_t thread_count = std::thread::hardware_concurrency());
@@ -67,7 +70,7 @@ public:
 
     /* todo: with callback */
     template <typename F, typename... Args, typename C>
-    void addTaskWithCallback(F&& f, C&& on_compelete, Args&&... args) {
+    void addTaskCallback(F&& f, C&& on_compelete, Args&&... args) {
         // 返回值类型
         auto task_payload = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
 
@@ -99,3 +102,5 @@ private:
     std::condition_variable condition;
     bool stop;
 };
+}  // namespace pool
+}  // namespace tcs

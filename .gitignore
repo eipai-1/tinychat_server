@@ -1,3 +1,7 @@
 build/
 CMkaeUserPresets.json
 .vscode
+linux-CMakeLists.txt
+api.md
+.vs/
+doc/logs/

@@ -1,4 +1,3 @@
-#include <semaphore.h>
 #include <thread>
 #include <iostream>
 #include <semaphore>
@@ -6,13 +5,18 @@
 #include <chrono>
 #include <memory>
 
-#include "utils/config.h"
-#include "pool/sql_conn_RAII.hpp"
-#include "pool/sql_conn_pool.hpp"
+#include "utils/config.hpp"
+#include "db/sql_conn_RAII.hpp"
+#include "db/sql_conn_pool.hpp"
+#include "model/auth_models.hpp"
+
+using SqlConnRAII = tcs::db::SqlConnRAII;
+using SqlConnPool = tcs::db::SqlConnPool;
+using AppConfig = tcs::utils::AppConfig;
 
 void test_sql_conn_pool() {
-    AppConfig config("config.ini");
-    SqlConnPool::instance()->init(config.database);
+    AppConfig::getConfig()->init("../../doc/config.ini");
+    tcs::db::SqlConnPool::instance()->init();
 
     std::vector<std::thread> threads;
     std::vector<result_type> results;
@@ -24,10 +28,10 @@ void test_sql_conn_pool() {
 
     for (const auto &query : queries) {
         threads.emplace_back([&results, &mtx, query] {
-            auto conn = SqlConnRAII(SqlConnPool::instance());
-            auto result = conn.query(query);
+            auto conn = tcs::db::SqlConnRAII();
+            // auto result = conn.query(query);
             std::lock_guard<std::mutex> lock(mtx);
-            results.push_back(result);
+            // results.push_back(result);
         });
     }
 
@@ -49,7 +53,39 @@ void test_sql_conn_pool() {
     }
 }
 
-void test_config() {}
+void test_mysql_conn() {
+    AppConfig::getConfig()->init("../../doc/config.ini");
+    SqlConnPool::instance()->init();
+    SqlConnRAII connRAII;
+
+    std::unique_ptr<sql::ResultSet> res(
+        connRAII.execute_query("SELECT * FROM users WHERE username = ? AND password = ?",
+                               std::string("Frank"), std::string("Frank_111")));
+
+    if (res->next()) {
+        std::cout << "User ID: " << res->getInt("id") << std::endl;
+        std::cout << "Email: " << res->getString("email") << std::endl;
+        std::cout << "Created At: " << res->getString("created_at") << std::endl;
+    } else {
+        std::cout << "No user found with the username 'Frank'." << std::endl;
+    }
+}
+
+void test_cmake() {
+#ifdef PLATFORM_WINDOWS
+    std::cout << "This is Windows platform!" << std::endl;
+#else
+    std::cout << "This is not Windows platform!" << std::endl;
+#endif
+}
+
+void test_config(int argc, char *argv[]) {
+    try {
+        tcs::utils::AppConfig::getConfig()->init("../../doc/config.ini");
+    } catch (const std::exception &e) {
+        std::cerr << "Error loading configuration: " << e.what() << std::endl;
+    }
+}
 
 void test_std_semaphore() {
     int count = 8;
@@ -75,7 +111,21 @@ void test_std_semaphore() {
     }
 }
 
-int main() {
-    test_sql_conn_pool();
+void init() {
+    AppConfig::getConfig()->init("../../doc/config.ini");
+
+    SqlConnPool::instance()->init();
+}
+
+void test_tag_invoke() {}
+
+int main(int argc, char *argv[]) {
+    try {
+        init();
+        test_tag_invoke();
+    } catch (std::exception &e) {
+        std::cerr << "Excpetion in main: " << e.what() << std::endl;
+        return 1;
+    }
     return 0;
 }

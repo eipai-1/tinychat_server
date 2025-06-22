@@ -20,9 +20,13 @@ class MyProjectConan(ConanFile):
         # I've used slightly older, very stable versions to maximize the chance
         # of finding pre-built binaries, avoiding long compilation times.
         # You can change these back to your originals if needed.
-        self.requires("boost/1.88.0")      # 1.83.0 is a very common and stable version
-        self.requires("jsoncpp/1.9.6")    # 1.9.5 is the most widely available version
-        self.requires("libmysqlclient/8.1.0") # Your specified version is good
+        self.requires("boost/1.88.0")      
+        #self.requires("libmysqlclient/8.0.34")
+        self.requires("spdlog/1.15.3")
+        self.requires("jwt-cpp/0.7.1")
+        self.requires("libsodium/1.0.20")
+        #self.requires("soci/4.0.3")
+        #self.requires("mysql-connector-cpp/9.2.0")
 
     def layout(self):
         """
@@ -38,5 +42,8 @@ class MyProjectConan(ConanFile):
         Define options for your dependencies here.
         """
         # For example, if you wanted to force dynamic linking for a package:
-        self.options["boost/*"].shared = True
+        #self.options["boost/*"].shared = True
+        #self.options["soci/*"].shared = True
+        #self.options["libmysqlclient/*"].shared = True
+        #self.options["mysql-connector-cpp/*"].shared = True
         pass

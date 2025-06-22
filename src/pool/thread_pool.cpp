@@ -1,6 +1,9 @@
 #include "pool/thread_pool.hpp"
 #include <stdexcept>
 
+namespace tcs {
+namespace pool {
+
 ThreadPool::ThreadPool(std::size_t thread_count) : stop(false) {
     for (std::size_t i = 0; i < thread_count; i++) {
         workers.emplace_back([this] {
@@ -45,3 +48,5 @@ ThreadPool::~ThreadPool() {
         worker.join();
     }
 }
+}  // namespace pool
+}  // namespace tcs

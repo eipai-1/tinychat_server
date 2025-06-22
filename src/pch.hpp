@@ -1,18 +1,16 @@
 #pragma once
 
-// src/pch.hpp
-#pragma once
-
-// --- 标准库 ---
+#include <algorithm>
 #include <cstdlib>
 #include <functional>
 #include <iostream>
 #include <memory>
 #include <string>
+#include <thread>
 #include <vector>
-#include <set>
-#include <mutex>
 
-#include <boost/beast.hpp>
+#include <boost/beast/core.hpp>
+#include <boost/beast/http.hpp>
+#include <boost/asio/strand.hpp>
 
-#include <boost/asio.hpp>
+#include <spdlog/spdlog.h>

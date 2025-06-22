@@ -1,8 +1,7 @@
 #pragma once
+#include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
-#include <boost/beast.hpp>
-#include <boost/asio.hpp>
-#include <memory>
+#include <boost/asio/strand.hpp>
 
 namespace beast = boost::beast;
 namespace http = beast::http;
