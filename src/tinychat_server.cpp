@@ -16,7 +16,7 @@ namespace tcs {
 void TinychatServer::init_log() {
     // 初始化日志系统
     auto daily_sink = std::make_shared<spdlog::sinks::daily_file_sink_mt>(
-        "../../doc/logs/tinychat_server.log", 0, 0, true);
+        AppConfig::get().server().log_file(), 0, 0, true);
 
 #ifndef NDEBUG
     daily_sink->set_level(spdlog::level::debug);
@@ -38,13 +38,12 @@ void TinychatServer::init_log() {
 #ifndef NDEBUG
     spdlog::flush_on(spdlog::level::debug);
 #else
-    spdlog::flush_on(spdlog::level::err);
+    spdlog::flush_on(spdlog::level::info);
 #endif
     spdlog::info("----Log initialized successfully----");
 }
 
-TinychatServer::TinychatServer()
-    : ioc_(AppConfig::getConfig()->server.threads), listener_(nullptr) {
+TinychatServer::TinychatServer() : ioc_(AppConfig::get().server().threads()), listener_(nullptr) {
     // 初始化日志
     init_log();
     sodium_init();
@@ -53,13 +52,16 @@ TinychatServer::TinychatServer()
 
     listener_ = std::make_shared<core::Listener>(
         ioc_,
-        tcp::endpoint(net::ip::make_address(AppConfig::getConfig()->server.host),
-                      AppConfig::getConfig()->server.port),
-        AppConfig::getConfig()->server.doc_root);
+        tcp::endpoint(net::ip::make_address(AppConfig::get().server().host()),
+                      AppConfig::get().server().port()),
+        AppConfig::get().server().doc_root());
+
+    // 初始化
+    tcs::core::WSSessionMgr::get();
 
     spdlog::info("Tinychat server started successfully on {}:{}. Document root: {}",
-                 AppConfig::getConfig()->server.host, AppConfig::getConfig()->server.port,
-                 AppConfig::getConfig()->server.doc_root);
+                 AppConfig::get().server().host(), AppConfig::get().server().port(),
+                 AppConfig::get().server().doc_root());
 }
 
 void TinychatServer::run() {
@@ -80,7 +82,7 @@ void TinychatServer::run() {
     // ----------------------------
     listener_->run();
     std::vector<std::thread> threads;
-    for (unsigned int i = 0; i < AppConfig::getConfig()->server.threads; ++i) {
+    for (unsigned int i = 0; i < AppConfig::get().server().threads(); ++i) {
         threads.emplace_back([this]() { ioc_.run(); });
     }
     ioc_.run();

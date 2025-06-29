@@ -5,3 +5,4 @@ linux-CMakeLists.txt
 api.md
 .vs/
 doc/logs/
+temp/

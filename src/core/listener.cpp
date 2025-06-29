@@ -1,6 +1,6 @@
 #include "core/listener.hpp"
 #include "spdlog/spdlog.h"
-#include "core/session.hpp"
+#include "core/http_session.hpp"
 
 namespace tcs {
 namespace core {
@@ -50,7 +50,8 @@ void Listener::on_accept(beast::error_code ec, tcp::socket socket) {
         spdlog::error("Failed to accept connection: {}", ec.message());
         return;
     } else {
-        std::make_shared<Session>(std::move(socket), std::make_shared<const std::string>(doc_root_))
+        std::make_shared<HttpSession>(std::move(socket),
+                                      std::make_shared<const std::string>(doc_root_))
             ->run();
     }
     do_accept();  // Accept another connection

@@ -2,6 +2,8 @@
 
 namespace tcs {
 namespace utils {
+std::unique_ptr<AppConfig> AppConfig::instance_ptr_ = nullptr;
+
 void AppConfig::init(const std::string& filename) {
     // 1. 检查文件是否存在
     if (!std::filesystem::exists(filename)) {
@@ -18,60 +20,26 @@ void AppConfig::init(const std::string& filename) {
     }
 
     try {
+        instance_ptr_.reset(new AppConfig);
         // 3. 逐个读取配置项，并直接赋值给成员变量
         //    使用一个辅助 lambda 来避免重复代码
         auto get_value = [&](const std::string& path) {
             return config_tree.get_optional<std::string>(path);
         };
 
-        // --- 读取并校验数据库连接池配置 ---
-        // 使用 get_optional 配合 or_else 可以提供更灵活的错误处理
-        // 但为了严格性，我们还是用 get 来强制要求所有字段必须存在
-        this->database.sqlconnpool_max_size = config_tree.get<int>("Database.sqlconnpool_max_size");
-        if (this->database.sqlconnpool_max_size <= 0) {
-            throw std::runtime_error(
-                "Value for 'sqlconnpool_max_size' must be a positive integer.");
-        }
+        instance_ptr_->database_.sqlconnpool_max_size(
+            config_tree.get<int>("Database.sqlconnpool_max_size"));
+        instance_ptr_->database_.server(config_tree.get<std::string>("Database.server"));
+        instance_ptr_->database_.user(config_tree.get<std::string>("Database.user"));
+        instance_ptr_->database_.passwd(config_tree.get<std::string>("Database.passwd"));
+        instance_ptr_->database_.db(config_tree.get<std::string>("Database.db"));
 
-        // --- 读取并校验数据库连接信息 ---
-        this->database.server = config_tree.get<std::string>("Database.server");
-        if (this->database.server.empty()) {
-            throw std::runtime_error("Value for 'Database.server' cannot be empty.");
-        }
-
-        this->database.user = config_tree.get<std::string>("Database.user");
-        if (this->database.user.empty()) {
-            throw std::runtime_error("Value for 'user' cannot be empty.");
-        }
-
-        this->database.passwd = config_tree.get<std::string>("Database.passwd");
-
-        this->database.db = config_tree.get<std::string>("Database.db");
-        if (this->database.db.empty()) {
-            throw std::runtime_error("Value for 'db' (database name) cannot be empty.");
-        }
-
-        // --- 读取并校验服务器配置 ---
-        this->server.host = config_tree.get<std::string>("Server.host");
-        if (this->server.host.empty()) {
-            throw std::runtime_error("Value for 'host' cannot be empty.");
-        }
-        this->server.port = config_tree.get<unsigned short>("Server.port");
-        if (this->server.port == 0 || this->server.port > 65535) {
-            throw std::runtime_error("Value for 'port' must be between 1 and 65535.");
-        }
-        this->server.doc_root = config_tree.get<std::string>("Server.doc_root");
-        if (this->server.doc_root.empty()) {
-            throw std::runtime_error("Value for 'doc_root' cannot be empty.");
-        }
-        this->server.threads = config_tree.get<unsigned int>("Server.threads");
-        if (this->server.threads == 0) {
-            throw std::runtime_error("Value for 'threads' must be a positive integer.");
-        }
-        this->server.jwt_secret = config_tree.get<std::string>("Server.jwt_secret");
-        if (this->server.jwt_secret.empty()) {
-            throw std::runtime_error("Value for 'jwt_secret' cannot be empty.");
-        }
+        instance_ptr_->server_.host(config_tree.get<std::string>("Server.host"));
+        instance_ptr_->server_.port(config_tree.get<unsigned short>("Server.port"));
+        instance_ptr_->server_.doc_root(config_tree.get<std::string>("Server.doc_root"));
+        instance_ptr_->server_.threads(config_tree.get<unsigned int>("Server.threads"));
+        instance_ptr_->server_.jwt_secret(config_tree.get<std::string>("Server.jwt_secret"));
+        instance_ptr_->server_.log_file(config_tree.get<std::string>("Server.log_file"));
 
     } catch (const pt::ptree_error& e) {
         // 捕获所有 property_tree 相关的错误

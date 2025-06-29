@@ -5,6 +5,7 @@
 #include "db/sql_conn_pool.hpp"
 #include "pool/thread_pool.hpp"
 #include "core/listener.hpp"
+#include "core/ws_session_mgr.hpp"
 
 namespace tcs {
 class TinychatServer {

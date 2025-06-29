@@ -22,5 +22,10 @@ struct RegisterRequest {
 };
 RegisterRequest tag_invoke(json::value_to_tag<RegisterRequest>, const json::value& jv);
 
+struct UserClaims {
+    std::string uuid;
+    std::string username;
+};
+
 }  // namespace model
 }  // namespace tcs

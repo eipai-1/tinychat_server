@@ -30,22 +30,22 @@ Connection* SqlConnPool::getConn() {
 }
 
 void SqlConnPool::init() {
-    max_conn_ = AppConfig::getConfig()->database.sqlconnpool_max_size;
+    max_conn_ = AppConfig::get().database().sqlconnpool_max_size();
     smph_ = std::make_unique<std::counting_semaphore<SEMAPHORE_MAX_VALUE>>(
-        AppConfig::getConfig()->database.sqlconnpool_max_size);
+        AppConfig::get().database().sqlconnpool_max_size());
     MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
 
     sql::ConnectOptionsMap connection_properties;
-    connection_properties["hostName"] = AppConfig::getConfig()->database.server;
-    connection_properties["userName"] = AppConfig::getConfig()->database.user;
-    connection_properties["password"] = AppConfig::getConfig()->database.passwd;
-    connection_properties["schema"] = AppConfig::getConfig()->database.db;
+    connection_properties["hostName"] = AppConfig::get().database().server();
+    connection_properties["userName"] = AppConfig::get().database().user();
+    connection_properties["password"] = AppConfig::get().database().passwd();
+    connection_properties["schema"] = AppConfig::get().database().db();
     connection_properties["OPT_RECONNECT"] = true;  // 关键选项
 
-//#ifdef MYSQL_PLUGIN_DIR
-//    connection_properties["lib_extra_options"] = "plugin_dir=" MYSQL_PLUGIN_DIR;
-//    std::cout << "Using MySQL Plugin Dir: " << MYSQL_PLUGIN_DIR << std::endl;
-//#endif
+    // #ifdef MYSQL_PLUGIN_DIR
+    //     connection_properties["lib_extra_options"] = "plugin_dir=" MYSQL_PLUGIN_DIR;
+    //     std::cout << "Using MySQL Plugin Dir: " << MYSQL_PLUGIN_DIR << std::endl;
+    // #endif
 
     if (!driver) {
         std::cerr << "MySQL driver instance is null!" << std::endl;
@@ -106,7 +106,9 @@ Connection* SqlConnPool::getSql() {
         if (!driver) {
             throw std::runtime_error("MySQL driver instance is null!");
         }
-        sql = driver->connect(db_cfg_.server, db_cfg_.user, db_cfg_.passwd);
+        sql = driver->connect(AppConfig::get().database().server(),
+                              AppConfig::get().database().user(),
+                              AppConfig::get().database().passwd());
         return sql;
     }
 }

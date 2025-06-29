@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <boost/json.hpp>
 #include <boost/beast/version.hpp>
 #include <boost/uuid/uuid.hpp>
@@ -9,20 +10,24 @@
 #include "sodium.h"
 
 #include "utils/net_utils.hpp"
-#include "utils/status_code.hpp"
+#include "utils/enums.hpp"
 #include "db/sql_conn_RAII.hpp"
 #include "model/auth_models.hpp"
+#include "model/chat_models.hpp"
+#include "utils/types.hpp"
 
 namespace json = boost::json;
 namespace model = tcs::model;
 
 using StatusCode = tcs::utils::StatusCode;
+using RoomType = tcs::utils::RoomType;
 
 template <typename Allocator>
 using api_request = http::request<http::string_body, http::basic_fields<Allocator>>;
 
 using SqlConnPool = tcs::db::SqlConnPool;
 using SqlConnRAII = tcs::db::SqlConnRAII;
+using UserClaims = tcs::model::UserClaims;
 
 namespace tcs {
 namespace core {
@@ -38,21 +43,32 @@ public:
     template <typename Allocator>
     static http::message_generator handle_request(std::string_view doc_root,
                                                   api_request<Allocator>&& req) {
-        if (req.target() == "/login") {
+        if (req.target() == "/api/login") {
             return handle_login(std::move(req));
-        } else if (req.target() == "/register") {
+        } else if (req.target() == "/api/register") {
             return handle_register(std::move(req));
+        } else if (req.target() == "/api/group_room") {
+            return create_g_room(std::move(req));
+        } else if (req.target() == "/api/private_room") {
+            return create_p_room(std::move(req));
+        } else if (req.target().starts_with("/api/rooms/")) {
+            // return handle_chat_room(std::move(req));
         } else {
             spdlog::warn("Unhandled request: {}", req.target());
             return bad_request(std::move(req), "Not Found");
         }
     }
 
-private:
+    static UserClaims extract_user_claims(const std::string& token);
+
+    static std::string generate_private_room_uuid(std::string u1, std::string u2);
     static std::string generate_uuid() {
         static boost::uuids::random_generator uuid_gen_;
         return boost::uuids::to_string(uuid_gen_());
     }
+
+private:
+    static std::string bytes_to_hex(const unsigned char* bytes, std::size_t len);
 
     static std::string hash_password(const std::string& plain_password);
     static bool verify_password(const std::string& plain_password, const std::string& stored_hash);
@@ -69,7 +85,81 @@ private:
         return res;
     }
 
-    static std::string generate_login_token(int user_id, const std::string& username);
+    // 默认建群者是群主
+    template <typename Allocator>
+    static http::message_generator create_g_room(api_request<Allocator>&& req) {
+        if (req.method() != http::verb::post) {
+            return bad_request(std::move(req));
+        }
+
+        try {
+            json::value jv = json::parse(req.body());
+            model::CreateGRoomReq create_g_room_req = json::value_to<model::CreateGRoomReq>(jv);
+            SqlConnRAII conn;
+            std::string room_uuid = generate_uuid();
+
+            UserClaims user_claims =
+                extract_user_claims(std::string(req[http::field::authorization]));
+
+            int updated_row = conn.execute_update(
+                "INSERT INTO rooms (uuid, name, type, owner_uuid) VALUES (?, ?, ?, ?)", room_uuid,
+                create_g_room_req.name, static_cast<i8>(RoomType::GROUP), user_claims.uuid);
+            if (updated_row == 1) {
+                ApiResponse<model::CreateGRoomResp> resp{
+                    StatusCode::Success, "Group room created successfully",
+                    model::CreateGRoomResp{.room_uuid = room_uuid}};
+
+                spdlog::info("Group room created: {}, UUID: {}", create_g_room_req.name, room_uuid);
+
+                return create_json_response(http::status::ok, req.version(), req.keep_alive(),
+                                            json::value_from(resp));
+            } else {
+                spdlog::error("Failed to create group room: {}", create_g_room_req.name);
+                ApiResponse<std::nullptr_t> resp{StatusCode::CreateRoomFailed,
+                                                 "Group room creation failed", nullptr};
+                return create_json_response(http::status::bad_request, req.version(),
+                                            req.keep_alive(), json::value_from(resp));
+            }
+        } catch (const std::exception& e) {
+            spdlog::error("Exception during group room creation: {}", e.what());
+            return bad_request(std::move(req), " Server Error");
+        }
+    }
+
+    template <typename Allocator>
+    static http::message_generator create_p_room(api_request<Allocator>&& req) {
+        if (req.method() != http::verb::post) {
+            return bad_request(std::move(req));
+        }
+        try {
+            json::value jv = json::parse(req.body());
+            model::CreatePRoomReq create_g_room_req = json::value_to<model::CreatePRoomReq>(jv);
+
+            SqlConnRAII conn;
+
+            std::string room_uuid = generate_uuid();
+            UserClaims user_claims =
+                extract_user_claims(std::string(req[http::field::authorization]));
+
+            int updated_row = conn.execute_update(
+                "INSERT INTO rooms (uuid, type, owner_uuid) VALUES (?, ?, ?, ?)", room_uuid,
+                static_cast<i8>(RoomType::PRIVATE), user_claims.uuid);
+
+            if (updated_row != 1) {
+                spdlog::error("Failed to create private room for user: {}", user_claims.username);
+                throw std::runtime_error("Failed to create private room");
+            }
+
+            updated_row = conn.execute_update(
+                "INSERT INTO room_members (room_uuid, user_uuid) VALUES (?, ?)", room_uuid);
+
+        } catch (const std::exception& e) {
+            spdlog::error("Exception during private room creation: {}", e.what());
+            return bad_request(std::move(req), " Server Error");
+        }
+    }
+
+    static std::string generate_login_token(const std::string& username, const std::string& uuid);
 
     template <typename Allocator>
     static http::message_generator bad_request(api_request<Allocator>&& req,
@@ -81,7 +171,7 @@ private:
 
         json::object obj;
         obj["code"] = static_cast<int>(StatusCode::BadRequest);
-        obj["message"] = "Bad Request: " + msg;
+        obj["message"] = "Bad Request" + msg;
         obj["data"] = nullptr;
         res.body() = json::serialize(obj);
 
@@ -111,6 +201,7 @@ private:
 
             if (result_set->next()) {
                 std::string hasd_pwd = result_set->getString("password_hash");
+                std::string uuid = result_set->getString("uuid");
 
                 if (!verify_password(login_request.password, hasd_pwd)) {
                     spdlog::debug("Login failed for username: {}, password incorrect.",
@@ -119,8 +210,7 @@ private:
                     return create_json_response(http::status::unauthorized, req.version(),
                                                 req.keep_alive(), json::value_from(resp));
                 }
-                int user_id = result_set->getInt("id");
-                std::string token = generate_login_token(user_id, login_request.username);
+                std::string token = generate_login_token(login_request.username, uuid);
                 ApiResponse resp{StatusCode::Success, "Login successful", token};
 
                 return create_json_response(http::status::ok, req.version(), req.keep_alive(),

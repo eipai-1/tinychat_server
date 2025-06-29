@@ -1,0 +1,49 @@
+#pragma once
+#include <boost/json.hpp>
+
+#include "utils/types.hpp"
+
+namespace tcs {
+namespace utils {
+enum class StatusCode : int {
+    Success = 0,
+
+    // 通用错误
+    BadRequest = 1000,
+
+    // 用户相关
+    LoginFailed = 1001,
+    RegFailed = 1002,
+    UserNotFound = 1003,
+    IncorrectPwd = 1004,
+
+    // 聊天房间相关
+    CreateRoomFailed = 2001,
+};
+inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
+                       const StatusCode& code) {
+    jv = static_cast<int>(code);
+}
+
+enum class RoomType : i8 {
+    GROUP = 1,
+    PRIVATE = 2,
+};
+
+enum class GroupRole : i8 {
+    OWNER = 3,   // 群主
+    ADMIN = 2,   // 管理员
+    MEMBER = 1,  // 普通成员
+};
+
+enum class ServerRespType : int {
+    PMsgSentInfo = 1,
+    PMsgToSend = 2,
+};
+inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
+                       const ServerRespType& type) {
+    jv = static_cast<int>(type);
+}
+
+}  // namespace utils
+}  // namespace tcs

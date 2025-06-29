@@ -2,7 +2,7 @@
 #include <iostream>
 
 int main(int argc, char* argv[]) {
-#ifdef  NDEBUG
+#ifdef NDEBUG
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0] << " <config_file>" << std::endl;
         return 1;
@@ -14,7 +14,7 @@ int main(int argc, char* argv[]) {
 #ifdef NDEBUG
         tcs::utils::AppConfig::getConfig()->init(argv[1]);
 #else
-        tcs::utils::AppConfig::getConfig()->init("../../doc/config.ini");
+        tcs::utils::AppConfig::init("../../doc/config.ini");
 #endif
 
         // 初始化服务器

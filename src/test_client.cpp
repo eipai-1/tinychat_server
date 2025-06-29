@@ -15,7 +15,7 @@ using SqlConnPool = tcs::db::SqlConnPool;
 using AppConfig = tcs::utils::AppConfig;
 
 void test_sql_conn_pool() {
-    AppConfig::getConfig()->init("../../doc/config.ini");
+    AppConfig::get().init("../../doc/config.ini");
     tcs::db::SqlConnPool::instance()->init();
 
     std::vector<std::thread> threads;
@@ -54,7 +54,7 @@ void test_sql_conn_pool() {
 }
 
 void test_mysql_conn() {
-    AppConfig::getConfig()->init("../../doc/config.ini");
+    AppConfig::get().init("../../doc/config.ini");
     SqlConnPool::instance()->init();
     SqlConnRAII connRAII;
 
@@ -81,7 +81,7 @@ void test_cmake() {
 
 void test_config(int argc, char *argv[]) {
     try {
-        tcs::utils::AppConfig::getConfig()->init("../../doc/config.ini");
+        tcs::utils::AppConfig::get().init("../../doc/config.ini");
     } catch (const std::exception &e) {
         std::cerr << "Error loading configuration: " << e.what() << std::endl;
     }
@@ -112,7 +112,7 @@ void test_std_semaphore() {
 }
 
 void init() {
-    AppConfig::getConfig()->init("../../doc/config.ini");
+    AppConfig::get().init("../../doc/config.ini");
 
     SqlConnPool::instance()->init();
 }

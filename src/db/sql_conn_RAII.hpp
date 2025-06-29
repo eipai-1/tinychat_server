@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "db/sql_conn_pool.hpp"
+#include "utils/types.hpp"
 
 using result_type = std::vector<std::map<std::string, std::optional<std::string>>>;
 using PrepStmt = sql::PreparedStatement;
@@ -23,6 +24,8 @@ public:
     ~SqlConnRAII();
 
     void bind_all_param(PrepStmt* pstmt, int idx, const std::string& str);
+
+    void bind_all_param(PrepStmt* pstmt, int idx, int type) { pstmt->setInt(idx, type); }
 
     void bind_all_param(PrepStmt* pstmt, int idx) {}
 
