@@ -65,6 +65,32 @@ std::string RequestHandler::generate_private_room_uuid(std::string u1, std::stri
     return "pr-" + hash_hex;
 }
 
+std::string_view RequestHandler::extract_target_param(std::string_view target, std::size_t index) {
+    size_t start = 0;
+    size_t end = 0;
+    size_t current = 0;
+
+    while (current <= index) {
+        start = end;
+        if (start >= target.size()) return {};  // 不足这么多段
+
+        // 跳过开头的 '/'
+        if (target[start] == '/') ++start;
+
+        end = target.find('/', start);
+        if (end == std::string_view::npos) {
+            end = target.size();
+        }
+
+        if (current == index) {
+            return target.substr(start, end - start);
+        }
+
+        ++current;
+    }
+    return std::string_view();
+}
+
 std::string RequestHandler::bytes_to_hex(const unsigned char* bytes, std::size_t len) {
     std::stringstream ss;
     ss << std::hex << std::setfill('0');

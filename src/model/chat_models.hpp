@@ -44,5 +44,17 @@ inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
     jv = json::object{{"room_uuid", resp.room_uuid}};
 }
 
+// Group Room Invitation Request
+struct GRoomInvtReq {
+    std::string invitee_uuid;
+};
+inline GRoomInvtReq tag_invoke(boost::json::value_to_tag<GRoomInvtReq>,
+                               const boost::json::value& jv) {
+    const json::object obj = jv.as_object();
+    return GRoomInvtReq{
+        .invitee_uuid = json::value_to<std::string>(obj.at("invitee_uuid")),
+    };
+}
+
 }  // namespace model
 }  // namespace tcs

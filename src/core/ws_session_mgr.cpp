@@ -2,6 +2,7 @@
 
 #include "core/ws_session_mgr.hpp"
 #include "core/websocket_session.hpp"
+#include "db/sql_conn_RAII.hpp"
 
 namespace tcs {
 namespace core {
@@ -40,5 +41,39 @@ void WSSessionMgr::write_to(const std::string& session_uuid, const std::string& 
         spdlog::warn("Session {} not found or expired", session_uuid);
     }
 }
+
+void WSSessionMgr::write_to_room(const std::string& room_uuid, const std::string& msg) {
+    std::vector<std::string> users_in_group;
+    {
+        SqlConnRAII conn;
+        std::unique_ptr<sql::ResultSet> res(conn.execute_query(
+            "SELECT user_uuid FROM room_members WHERE room_uuid = ?", room_uuid));
+
+        while (res->next()) {
+            std::string user_uuid = res->getString("user_uuid");
+            users_in_group.push_back(user_uuid);
+        }
+    }
+
+    std::vector<std::shared_ptr<WebsocketSession>> online_users;
+    {
+        std::lock_guard<std::mutex> lock(mtx_);
+        for (const auto& user_uuid : users_in_group) {
+            auto it = sessions_.find(user_uuid);
+            if (it != sessions_.end()) {
+                if (auto session_ptr = it->second.lock()) {
+                    online_users.push_back(session_ptr);
+                } else {
+                    sessions_.erase(it);  // 清理过期会话
+                }
+            }
+        }
+    }
+
+    for (const auto& session_ptr : online_users) {
+        session_ptr->send(std::make_shared<const std::string>(msg));
+    }
+}
+
 }  // namespace core
 }  // namespace tcs

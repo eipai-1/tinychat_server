@@ -52,7 +52,7 @@ public:
         } else if (req.target() == "/api/private_room") {
             return create_p_room(std::move(req));
         } else if (req.target().starts_with("/api/rooms/")) {
-            // return handle_chat_room(std::move(req));
+            return handle_chat_room(std::move(req));
         } else {
             spdlog::warn("Unhandled request: {}", req.target());
             return bad_request(std::move(req), "Not Found");
@@ -68,10 +68,17 @@ public:
     }
 
 private:
+    // 提取请求路径参数
+    // 例：/api/rooms/some_room_uuid/members
+    // -----0----1----------2----------3---
+    static std::string_view extract_target_param(std::string_view target, std::size_t index);
+
     static std::string bytes_to_hex(const unsigned char* bytes, std::size_t len);
 
     static std::string hash_password(const std::string& plain_password);
     static bool verify_password(const std::string& plain_password, const std::string& stored_hash);
+
+    static std::string generate_login_token(const std::string& username, const std::string& uuid);
 
     static http::response<http::string_body> create_json_response(http::status status,
                                                                   unsigned version, bool keep_alive,
@@ -103,23 +110,35 @@ private:
 
             int updated_row = conn.execute_update(
                 "INSERT INTO rooms (uuid, name, type, owner_uuid) VALUES (?, ?, ?, ?)", room_uuid,
-                create_g_room_req.name, static_cast<i8>(RoomType::GROUP), user_claims.uuid);
-            if (updated_row == 1) {
-                ApiResponse<model::CreateGRoomResp> resp{
-                    StatusCode::Success, "Group room created successfully",
-                    model::CreateGRoomResp{.room_uuid = room_uuid}};
+                create_g_room_req.name, static_cast<int>(RoomType::GROUP), user_claims.uuid);
 
-                spdlog::info("Group room created: {}, UUID: {}", create_g_room_req.name, room_uuid);
-
-                return create_json_response(http::status::ok, req.version(), req.keep_alive(),
-                                            json::value_from(resp));
-            } else {
+            if (updated_row != 1) {
                 spdlog::error("Failed to create group room: {}", create_g_room_req.name);
                 ApiResponse<std::nullptr_t> resp{StatusCode::CreateRoomFailed,
                                                  "Group room creation failed", nullptr};
                 return create_json_response(http::status::bad_request, req.version(),
                                             req.keep_alive(), json::value_from(resp));
             }
+
+            spdlog::info("Created group room: {}, owner: {}", room_uuid, user_claims.username);
+
+            updated_row = conn.execute_update(
+                "INSERT INTO room_members (room_uuid, user_uuid, role) VALUES (?, ?, ?)", room_uuid,
+                user_claims.uuid, static_cast<int>(utils::GroupRole::OWNER));
+
+            if (updated_row != 1) {
+                spdlog::error("Failed to add owner to group room: {}", room_uuid);
+                throw std::runtime_error("Failed to add owner to group room");
+            }
+
+            spdlog::info("Added owner {} to group room {}", user_claims.username, room_uuid);
+
+            return create_json_response(
+                http::status::ok, req.version(), req.keep_alive(),
+                json::value_from(ApiResponse<model::CreateGRoomResp>{
+                    StatusCode::Success, "Room created success, creator will be the owner.",
+                    model::CreateGRoomResp{.room_uuid = room_uuid}}));
+
         } catch (const std::exception& e) {
             spdlog::error("Exception during group room creation: {}", e.what());
             return bad_request(std::move(req), " Server Error");
@@ -159,7 +178,66 @@ private:
         }
     }
 
-    static std::string generate_login_token(const std::string& username, const std::string& uuid);
+    template <typename Allocator>
+    static http::message_generator handle_chat_room(api_request<Allocator>&& req) {
+        try {
+            std::string_view target = req.target();
+            std::string room_uuid = std::string(extract_target_param(target, 2));
+            std::string room_verb = std::string(extract_target_param(target, 3));
+
+            if (room_verb == "member") {
+                if (req.method() != http::verb::post) {
+                    return bad_request(std::move(req), " Method Not Allowed");
+                }
+                // todo: 邀请处理
+                model::GRoomInvtReq invt_req =
+                    json::value_to<model::GRoomInvtReq>(json::parse(req.body()));
+
+                SqlConnRAII conn;
+                UserClaims user_claims =
+                    extract_user_claims(std::string(req[http::field::authorization]));
+
+                std::unique_ptr<sql::ResultSet> result_set(
+                    conn.execute_query("SELECT * FROM rooms WHERE uuid = ?", room_uuid));
+
+                if (!result_set->next()) {
+                    spdlog::error("user {} trying to invited {} to a not found room {}",
+                                  user_claims.uuid, invt_req.invitee_uuid, room_uuid);
+                    return bad_request(std::move(req), " Room not found");
+                }
+
+                if (result_set->getInt("type") != static_cast<int>(RoomType::GROUP)) {
+                    spdlog::error("user {} trying to invited {} to a private room {}",
+                                  user_claims.uuid, invt_req.invitee_uuid, room_uuid);
+                    return bad_request(std::move(req), " Not a group room");
+                }
+
+                int update_row = conn.execute_update(
+                    "INSERT INTO room_members (room_uuid, user_uuid, role) VALUE (?, ?, ?)",
+                    room_uuid, invt_req.invitee_uuid, static_cast<int>(utils::GroupRole::MEMBER));
+
+                if (update_row != 1) {
+                    spdlog::error("Failed to invite user {} to room {}", invt_req.invitee_uuid,
+                                  room_uuid);
+                    return bad_request(std::move(req), " Invite failed");
+                }
+
+                spdlog::info("User {} invited {} to group room {} and added to group success",
+                             user_claims.uuid, invt_req.invitee_uuid, room_uuid);
+
+                return create_json_response(
+                    http::status::ok, req.version(), req.keep_alive(),
+                    json::value_from(ApiResponse<std::nullptr_t>{
+                        StatusCode::Success, "Invitee successfully added to the group", nullptr}));
+
+            } else {
+                return bad_request(std::move(req), " target not found");
+            }
+        } catch (const std::exception& e) {
+            spdlog::error("Exception in handle_chat_room: {}", e.what());
+            return bad_request(std::move(req), " Server Error");
+        }
+    }
 
     template <typename Allocator>
     static http::message_generator bad_request(api_request<Allocator>&& req,

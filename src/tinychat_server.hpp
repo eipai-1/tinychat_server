@@ -17,7 +17,6 @@ public:
 
 private:
     net::io_context ioc_;
-    pool::ThreadPool thread_pool_;
     std::shared_ptr<core::Listener> listener_;
 };
 }  // namespace tcs

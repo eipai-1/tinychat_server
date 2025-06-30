@@ -34,7 +34,10 @@ public:
         }
     }
 
+    // Write to a single session
     void write_to(const std::string& session_uuid, const std::string& msg);
+
+    void write_to_room(const std::string& room_uuid, const std::string& msg);
 
 private:
     WSSessionMgr() {}

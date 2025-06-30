@@ -50,6 +50,8 @@ TinychatServer::TinychatServer() : ioc_(AppConfig::get().server().threads()), li
 
     db::SqlConnPool::instance()->init();
 
+    pool::ThreadPool::init();
+
     listener_ = std::make_shared<core::Listener>(
         ioc_,
         tcp::endpoint(net::ip::make_address(AppConfig::get().server().host()),

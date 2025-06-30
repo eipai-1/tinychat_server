@@ -34,10 +34,11 @@ void WSHandler::handle_message(const std::string& msg_ptr, const std::string& us
 
         std::string type = obj.at("type").as_string().c_str();
 
+        SqlConnRAII conn;
         if (type == "private_message") {
             // todo: 好友检测
-            model::PrivateMsg private_msg = json::value_to<model::PrivateMsg>(jv.at("data"));
-            SqlConnRAII conn;
+            model::ClientPrivateMsg private_msg =
+                json::value_to<model::ClientPrivateMsg>(jv.at("data"));
             std::string msg_uuid = RequestHandler::generate_uuid();
             std::string room_uuid =
                 RequestHandler::generate_private_room_uuid(user_uuid, private_msg.other_user_uuid);
@@ -59,7 +60,7 @@ void WSHandler::handle_message(const std::string& msg_ptr, const std::string& us
                                                 .content = private_msg.content}};
 
             model::ServerRespMsg<std::string> msg_sent_info = {
-                .type = utils::ServerRespType::PMsgSentInfo, .data = std::string("")};
+                .type = utils::ServerRespType::MsgSentInfo, .data = std::string("")};
 
             WSSessionMgr::get().write_to(private_msg.other_user_uuid,
                                          json::serialize(json::value_from(private_msg_to_send)));
@@ -68,6 +69,29 @@ void WSHandler::handle_message(const std::string& msg_ptr, const std::string& us
                                          json::serialize(json::value_from(msg_sent_info)));
 
         } else if (type == "group_message") {
+            model::ClientGroupMsg group_msg = json::value_to<model::ClientGroupMsg>(jv.at("data"));
+
+            std::string msg_uuid = RequestHandler::generate_uuid();
+            int update_row = conn.execute_update(
+                "INSERT INTO messages (uuid, room_uuid, sender_uuid, content) VALUES (?, ?, ?, ?)",
+                msg_uuid, group_msg.room_uuid, user_uuid, group_msg.content);
+
+            if (update_row != 1) {
+                spdlog::error("Failed to insert group message into database for user: {}",
+                              user_uuid);
+                throw std::runtime_error("Failed to insert group message");
+            }
+
+            spdlog::debug("Inserted group message {}", msg_uuid);
+
+            model::ServerRespMsg<model::GroupMsgToSend> group_msg_to_send = {
+                .type = utils::ServerRespType::GMsgToSend,
+                .data = model::GroupMsgToSend{.room_uuid = group_msg.room_uuid,
+                                              .sender_uuid = user_uuid,
+                                              .content = group_msg.content}};
+
+            WSSessionMgr::get().write_to_room(group_msg.room_uuid,
+                                              json::serialize(json::value_from(group_msg_to_send)));
         }
     } catch (const std::exception& e) {
         spdlog::error("Exception in handle websocket message:{}", e.what());

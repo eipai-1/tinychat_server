@@ -3,7 +3,7 @@
 
 namespace tcs {
 namespace pool {
-
+std::unique_ptr<ThreadPool> ThreadPool::instance_ptr_ = nullptr;
 ThreadPool::ThreadPool(std::size_t thread_count) : stop(false) {
     for (std::size_t i = 0; i < thread_count; i++) {
         workers.emplace_back([this] {

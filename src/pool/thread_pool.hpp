@@ -9,13 +9,31 @@
 #include <cstddef>
 #include <future>
 #include <iostream>
+#include <stdexcept>
+#include <memory>
 
 namespace tcs {
 namespace pool {
 
 class ThreadPool {
 public:
-    explicit ThreadPool(std::size_t thread_count = std::thread::hardware_concurrency());
+    static ThreadPool& get() {
+        if (!instance_ptr_) {
+            throw std::runtime_error("ThreadPool has not been initialized. Call init() first.");
+        }
+        return *instance_ptr_;
+    }
+
+    static void init(std::size_t thread_count = std::thread::hardware_concurrency()) {
+        if (instance_ptr_) {
+            throw std::runtime_error("ThreadPool has already been initialized.");
+        }
+
+        // instance_ptr_ = new ThreadPool(thread_count);
+        instance_ptr_.reset(new ThreadPool(thread_count));
+    }
+
+    static void shutdown() { instance_ptr_.reset(); }
 
     /*
     根据调用的函数决定是否有返回值
@@ -28,9 +46,9 @@ public:
 
         // 如果没有返回值
         if constexpr (std::is_void_v<return_type>) {
-#ifndef NDEBUG
-            std::cout << "Calling addTask without return value" << std::endl;
-#endif
+            // #ifndef NDEBUG
+            //             std::cout << "Calling addTask without return value" << std::endl;
+            // #endif
             auto task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
             {
                 std::unique_lock<std::mutex> lock(queue_mutex);
@@ -43,11 +61,11 @@ public:
 
             // 如果函数有返回值
         } else {
-#ifndef NDEBUG
-            std::cout << "Calling addTask with return value" << std::endl;
-#endif
-            // packaged_task只能移动，但是std::function要求可拷贝
-            // 所以引入share_ptr
+            // #ifndef NDEBUG
+            //             std::cout << "Calling addTask with return value" << std::endl;
+            // #endif
+            //  packaged_task只能移动，但是std::function要求可拷贝
+            //  所以引入share_ptr
             auto task = std::make_shared<std::packaged_task<return_type()>>(
                 std::bind(std::forward<F>(f), std::forward<Args>(args)...));
 
@@ -91,16 +109,20 @@ public:
         condition.notify_one();
     }
 
-    ~ThreadPool();
-
     std::size_t getThreadCount() { return workers.size(); }
 
 private:
+    explicit ThreadPool(std::size_t thread_count);
+    ~ThreadPool();
     std::vector<std::thread> workers;
     std::queue<std::function<void()>> tasks;
     std::mutex queue_mutex;
     std::condition_variable condition;
     bool stop;
+    static std::unique_ptr<ThreadPool> instance_ptr_;
+
+    // 为了能让智能指针访问私有析构函数
+    friend class std::default_delete<ThreadPool>;
 };
 }  // namespace pool
 }  // namespace tcs

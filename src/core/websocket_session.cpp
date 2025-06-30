@@ -6,6 +6,7 @@
 #include "core/ws_handler.hpp"
 #include "db/sql_conn_RAII.hpp"
 #include "model/auth_models.hpp"
+#include "pool/thread_pool.hpp"
 
 using UserClaims = tcs::model::UserClaims;
 using SqlConnRAII = tcs::db::SqlConnRAII;
@@ -37,10 +38,11 @@ void WebsocketSession::on_read(beast::error_code ec, std::size_t bytes_transferr
 
     // todo: 流量控制
 
-    WSHandler::handle_message(beast::buffers_to_string(buffer_.data()), user_uuid_);
+    pool::ThreadPool::get().addTask(WSHandler::handle_message,
+                                    beast::buffers_to_string(buffer_.data()), user_uuid_);
+    // WSHandler::handle_message(beast::buffers_to_string(buffer_.data()), user_uuid_);
 
-    ws_.async_read(buffer_,
-                   beast::bind_front_handler(&WebsocketSession::on_read, shared_from_this()));
+    do_read();
 }
 
 void WebsocketSession::on_send(const std::shared_ptr<const std::string>& str_ptr) {

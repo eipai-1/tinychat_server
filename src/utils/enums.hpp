@@ -25,20 +25,27 @@ inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
     jv = static_cast<int>(code);
 }
 
-enum class RoomType : i8 {
+enum class RoomType : int {
     GROUP = 1,
     PRIVATE = 2,
 };
 
-enum class GroupRole : i8 {
+enum class GroupRole : int {
     OWNER = 3,   // 群主
     ADMIN = 2,   // 管理员
     MEMBER = 1,  // 普通成员
 };
 
 enum class ServerRespType : int {
-    PMsgSentInfo = 1,
+    // Message Sent Info
+    // 用于通知消息已送达
+    MsgSentInfo = 1,
+
+    // Private Message To Send
     PMsgToSend = 2,
+
+    // Group Message To Send
+    GMsgToSend = 3,
 };
 inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
                        const ServerRespType& type) {
