@@ -40,6 +40,7 @@ void AppConfig::init(const std::string& filename) {
         instance_ptr_->server_.threads(config_tree.get<unsigned int>("Server.threads"));
         instance_ptr_->server_.jwt_secret(config_tree.get<std::string>("Server.jwt_secret"));
         instance_ptr_->server_.log_file(config_tree.get<std::string>("Server.log_file"));
+        instance_ptr_->server_.queue_limit(config_tree.get<unsigned int>("Server.queue_limit"));
 
     } catch (const pt::ptree_error& e) {
         // 捕获所有 property_tree 相关的错误
