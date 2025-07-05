@@ -6,3 +6,5 @@ api.md
 .vs/
 doc/logs/
 temp/
+python_scripts/
+CMakeUserPresets.json
