@@ -12,7 +12,7 @@ int main(int argc, char* argv[]) {
     try {
         // 加载配置文件
 #ifdef NDEBUG
-        tcs::utils::AppConfig::getConfig()->init(argv[1]);
+        tcs::utils::AppConfig::init(argv[1]);
 #else
         tcs::utils::AppConfig::init("../../doc/config.ini");
 #endif

@@ -75,15 +75,6 @@ add_executable(test_client
     src/test_client.cpp
 )
 
-add_executable(
-    server
-    src/server.cpp
-)
-
-target_link_libraries(server PRIVATE
-    Boost::system
-)
-
 target_include_directories(test_client PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
