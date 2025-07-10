@@ -2,12 +2,13 @@
 #include <memory>
 #include <boost/asio/signal_set.hpp>
 #include <sodium.h>
+#include "spdlog/spdlog.h"
+#include "spdlog/sinks/daily_file_sink.h"
+#include "spdlog/async.h"
 
 #include "tinychat_server.hpp"
 #include "utils/config.hpp"
 #include "db/sql_conn_pool.hpp"
-#include "spdlog/spdlog.h"
-#include "spdlog/sinks/daily_file_sink.h"
 #include "utils/net_utils.hpp"
 
 using AppConfig = tcs::utils::AppConfig;
@@ -15,6 +16,7 @@ using AppConfig = tcs::utils::AppConfig;
 namespace tcs {
 void TinychatServer::init_log() {
     // 初始化日志系统
+    spdlog::init_thread_pool(8192, 1);
     auto daily_sink = std::make_shared<spdlog::sinks::daily_file_sink_mt>(
         AppConfig::get().server().log_file(), 0, 0, true);
 
@@ -23,22 +25,26 @@ void TinychatServer::init_log() {
 #else
     daily_sink->set_level(spdlog::level::info);
 #endif
-    auto logger = std::make_shared<spdlog::logger>("tinychat_server", daily_sink);
+    // auto logger = std::make_shared<spdlog::logger>("tinychat_server", daily_sink);
+    auto async_logger = spdlog::create_async<spdlog::sinks::daily_file_sink_mt>(
+        "daily_logger", AppConfig::get().server().log_file(), 0, 0);
 
 #ifndef NDEBUG
-    logger->set_level(spdlog::level::debug);
+    async_logger->set_level(spdlog::level::debug);
 #else
     logger->set_level(spdlog::level::info);
 #endif
 
-    spdlog::set_default_logger(logger);
+    spdlog::set_default_logger(async_logger);
 
     spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%l] [thread %t] %v");
+
+    spdlog::flush_every(std::chrono::seconds(5));
 
 #ifndef NDEBUG
     spdlog::flush_on(spdlog::level::debug);
 #else
-    spdlog::flush_on(spdlog::level::info);
+    spdlog::flush_on(spdlog::level::err);
 #endif
     spdlog::info("----Log initialized successfully----");
 }
@@ -98,5 +104,6 @@ void TinychatServer::run() {
 TinychatServer::~TinychatServer() {
     spdlog::info("Tinychat server is shutting down...");
     spdlog::default_logger()->flush();
+    spdlog::shutdown();
 }
 }  // namespace tcs

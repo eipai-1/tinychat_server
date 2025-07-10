@@ -55,10 +55,15 @@ public:
         const std::string& db() const { return db_; }
 
     private:
+        // 数据库连接池的最大连接数
         int sqlconnpool_max_size_ = 0;
+        // 数据库服务器
         std::string server_;
+        // 数据库用户
         std::string user_;
+        // 数据库密码
         std::string passwd_;
+        // 数据库名称
         std::string db_;
     };
 
@@ -116,11 +121,17 @@ public:
         unsigned int queue_limit() const { return queue_limit_; }
 
     private:
+        // 服务器监听地址
         std::string host_;
+        // 服务器监听端口
         unsigned short port_ = 0;
+        // 服务器文档根目录
         std::string doc_root_;
+        // ioc的线程数
         unsigned int threads_ = 0;
+        // jwt密钥
         std::string jwt_secret_;
+        // 日志文件路径
         std::string log_file_;
         unsigned int queue_limit_ = 0;
     };
