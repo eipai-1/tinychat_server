@@ -32,7 +32,7 @@ void TinychatServer::init_log() {
 #ifndef NDEBUG
     async_logger->set_level(spdlog::level::debug);
 #else
-    logger->set_level(spdlog::level::info);
+    async_logger->set_level(spdlog::level::err);
 #endif
 
     spdlog::set_default_logger(async_logger);
