@@ -125,8 +125,8 @@ private:
 
             // 2.添加创建者为群主
             int updated_row2 = conn.execute_update(
-                "INSERT INTOA room_members (room_uuid, user_uuid, role) VALUES (?, ?, ?)",
-                room_uuid, user_claims.uuid, static_cast<int>(utils::GroupRole::OWNER));
+                "INSERT INTO room_members (room_uuid, user_uuid, role) VALUES (?, ?, ?)", room_uuid,
+                user_claims.uuid, static_cast<int>(utils::GroupRole::OWNER));
 
             if (updated_row2 != 1) {
                 throw std::runtime_error("Failed to add owner to group room");
