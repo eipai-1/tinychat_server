@@ -23,6 +23,12 @@ public:
 
     ~SqlConnRAII();
 
+    void begin_transaction() { sql_->setAutoCommit(false); }
+
+    void commit() { sql_->commit(); }
+
+    void rollback() { sql_->rollback(); }
+
     void bind_all_param(PrepStmt* pstmt, int idx, const std::string& str);
 
     void bind_all_param(PrepStmt* pstmt, int idx, int type) { pstmt->setInt(idx, type); }
