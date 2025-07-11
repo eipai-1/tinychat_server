@@ -20,6 +20,9 @@ Connection* SqlConnRAII::getSql() {
 
 SqlConnRAII::~SqlConnRAII() {
     if (sql_->isValid()) {
+        if (!sql_->getAutoCommit()) {
+            sql_->setAutoCommit(true);
+        }
         pool_->freeConn(sql_);
     } else {
         spdlog::warn("Sql in SqlConnRAII is invalid. Not returning to pool");
