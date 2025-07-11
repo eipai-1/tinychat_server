@@ -99,35 +99,36 @@ private:
             return bad_request(std::move(req));
         }
 
+        SqlConnRAII conn;
         try {
             json::value jv = json::parse(req.body());
             model::CreateGRoomReq create_g_room_req = json::value_to<model::CreateGRoomReq>(jv);
-            SqlConnRAII conn;
+
+            //-----事务开始-----
+            conn.begin_transaction();
+
             std::string room_uuid = generate_uuid();
 
             UserClaims user_claims =
                 extract_user_claims(std::string(req[http::field::authorization]));
 
-            int updated_row = conn.execute_update(
+            // 1.创建房间
+            int updated_row1 = conn.execute_update(
                 "INSERT INTO rooms (uuid, name, type, owner_uuid) VALUES (?, ?, ?, ?)", room_uuid,
                 create_g_room_req.name, static_cast<int>(RoomType::GROUP), user_claims.uuid);
 
-            if (updated_row != 1) {
-                spdlog::error("Failed to create group room: {}", create_g_room_req.name);
-                ApiResponse<std::nullptr_t> resp{StatusCode::CreateRoomFailed,
-                                                 "Group room creation failed", nullptr};
-                return create_json_response(http::status::bad_request, req.version(),
-                                            req.keep_alive(), json::value_from(resp));
+            if (updated_row1 != 1) {
+                throw std::runtime_error("Failed to create group room");
             }
 
             spdlog::info("Created group room: {}, owner: {}", room_uuid, user_claims.username);
 
-            updated_row = conn.execute_update(
-                "INSERT INTO room_members (room_uuid, user_uuid, role) VALUES (?, ?, ?)", room_uuid,
-                user_claims.uuid, static_cast<int>(utils::GroupRole::OWNER));
+            // 2.添加创建者为群主
+            int updated_row2 = conn.execute_update(
+                "INSERT INTOA room_members (room_uuid, user_uuid, role) VALUES (?, ?, ?)",
+                room_uuid, user_claims.uuid, static_cast<int>(utils::GroupRole::OWNER));
 
-            if (updated_row != 1) {
-                spdlog::error("Failed to add owner to group room: {}", room_uuid);
+            if (updated_row2 != 1) {
                 throw std::runtime_error("Failed to add owner to group room");
             }
 
@@ -141,6 +142,9 @@ private:
 
         } catch (const std::exception& e) {
             spdlog::error("Exception during group room creation: {}", e.what());
+
+            conn.rollback();
+
             return bad_request(std::move(req), " Server Error");
         }
     }
