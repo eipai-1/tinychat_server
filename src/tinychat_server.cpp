@@ -49,14 +49,15 @@ void TinychatServer::init_log() {
     spdlog::info("----Log initialized successfully----");
 }
 
-TinychatServer::TinychatServer() : ioc_(AppConfig::get().server().threads()), listener_(nullptr) {
+TinychatServer::TinychatServer()
+    : ioc_(AppConfig::get().server().io_threads()), listener_(nullptr) {
     // 初始化日志
     init_log();
     sodium_init();
 
     db::SqlConnPool::instance()->init();
 
-    pool::ThreadPool::init();
+    pool::ThreadPool::init(AppConfig::get().server().worker_threads());
 
     listener_ = std::make_shared<core::Listener>(
         ioc_,
@@ -90,7 +91,7 @@ void TinychatServer::run() {
     // ----------------------------
     listener_->run();
     std::vector<std::thread> threads;
-    for (unsigned int i = 0; i < AppConfig::get().server().threads(); ++i) {
+    for (unsigned int i = 0; i < AppConfig::get().server().io_threads(); ++i) {
         threads.emplace_back([this]() { ioc_.run(); });
     }
     ioc_.run();

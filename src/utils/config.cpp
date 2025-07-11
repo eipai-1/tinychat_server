@@ -37,7 +37,9 @@ void AppConfig::init(const std::string& filename) {
         instance_ptr_->server_.host(config_tree.get<std::string>("Server.host"));
         instance_ptr_->server_.port(config_tree.get<unsigned short>("Server.port"));
         instance_ptr_->server_.doc_root(config_tree.get<std::string>("Server.doc_root"));
-        instance_ptr_->server_.threads(config_tree.get<unsigned int>("Server.threads"));
+        instance_ptr_->server_.io_threads(config_tree.get<unsigned int>("Server.io_threads"));
+        instance_ptr_->server_.worker_threads(
+            config_tree.get<unsigned int>("Server.worker_threads"));
         instance_ptr_->server_.jwt_secret(config_tree.get<std::string>("Server.jwt_secret"));
         instance_ptr_->server_.log_file(config_tree.get<std::string>("Server.log_file"));
         instance_ptr_->server_.queue_limit(config_tree.get<unsigned int>("Server.queue_limit"));

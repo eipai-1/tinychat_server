@@ -87,11 +87,17 @@ public:
             }
             doc_root_ = doc_root;
         }
-        void threads(unsigned int threads) {
+        void io_threads(unsigned int threads) {
             if (threads == 0) {
-                throw std::invalid_argument("Number of threads must be a positive integer.");
+                throw std::invalid_argument("IO threads must be a positive integer.");
             }
-            threads_ = threads;
+            io_threads_ = threads;
+        }
+        void worker_threads(unsigned int threads) {
+            if (threads == 0) {
+                throw std::invalid_argument("Worker threads must be a positive integer.");
+            }
+            worker_threads_ = threads;
         }
         void jwt_secret(const std::string& jwt_secret) {
             if (jwt_secret.empty()) {
@@ -115,7 +121,8 @@ public:
         const std::string& host() const { return host_; }
         unsigned short port() const { return port_; }
         const std::string& doc_root() const { return doc_root_; }
-        unsigned int threads() const { return threads_; }
+        unsigned int io_threads() const { return io_threads_; }
+        unsigned int worker_threads() const { return worker_threads_; }
         const std::string& jwt_secret() const { return jwt_secret_; }
         const std::string& log_file() const { return log_file_; }
         unsigned int queue_limit() const { return queue_limit_; }
@@ -128,7 +135,9 @@ public:
         // 服务器文档根目录
         std::string doc_root_;
         // ioc的线程数
-        unsigned int threads_ = 0;
+        unsigned int io_threads_ = 0;
+        // 线程池线程数
+        unsigned int worker_threads_ = 0;
         // jwt密钥
         std::string jwt_secret_;
         // 日志文件路径
