@@ -3,6 +3,7 @@
 #include <memory>
 #include <cstdlib>
 #include <mutex>
+#include <unordered_map>
 #include <map>
 #include <string>
 #include <string_view>

@@ -8,6 +8,8 @@
 #include <filesystem>
 #include <memory>
 
+#include "utils/types.hpp"
+
 namespace pt = boost::property_tree;
 
 namespace tcs {
@@ -117,6 +119,18 @@ public:
             }
             queue_limit_ = limit;
         }
+        void custom_epoch(u64 epoch) {
+            if (epoch == 0) {
+                throw std::invalid_argument("Custom epoch must be a non-zero value.");
+            }
+            custom_epoch_ = epoch;
+        }
+        void service_id(u64 service_id) {
+            if (service_id >= 1024) {
+                throw std::invalid_argument("Service ID must be less than 1024.");
+            }
+            service_id_ = service_id;
+        }
 
         const std::string& host() const { return host_; }
         unsigned short port() const { return port_; }
@@ -126,6 +140,8 @@ public:
         const std::string& jwt_secret() const { return jwt_secret_; }
         const std::string& log_file() const { return log_file_; }
         unsigned int queue_limit() const { return queue_limit_; }
+        u64 custom_epoch() const { return custom_epoch_; }
+        u64 service_id() const { return service_id_; }
 
     private:
         // 服务器监听地址
@@ -142,7 +158,12 @@ public:
         std::string jwt_secret_;
         // 日志文件路径
         std::string log_file_;
+        // HTTP处理队列数上限
         unsigned int queue_limit_ = 0;
+        // 自定义纪元时间
+        u64 custom_epoch_ = 0;
+        // 用于雪花id生成
+        u64 service_id_;
     };
 
     static void init(const std::string& filename);

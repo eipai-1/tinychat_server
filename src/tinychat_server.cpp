@@ -29,10 +29,11 @@ void TinychatServer::init_log() {
     auto async_logger = spdlog::create_async<spdlog::sinks::daily_file_sink_mt>(
         "daily_logger", AppConfig::get().server().log_file(), 0, 0);
 
+    // 低于设置级别的日志不输出
 #ifndef NDEBUG
     async_logger->set_level(spdlog::level::debug);
 #else
-    async_logger->set_level(spdlog::level::err);
+    async_logger->set_level(spdlog::level::info);
 #endif
 
     spdlog::set_default_logger(async_logger);
@@ -41,6 +42,7 @@ void TinychatServer::init_log() {
 
     spdlog::flush_every(std::chrono::seconds(5));
 
+    // 遇到设置的级别时立即刷新日志
 #ifndef NDEBUG
     spdlog::flush_on(spdlog::level::debug);
 #else
