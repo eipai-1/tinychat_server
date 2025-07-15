@@ -15,12 +15,14 @@
 #include "model/auth_models.hpp"
 #include "model/chat_models.hpp"
 #include "utils/types.hpp"
+#include "utils/snowflake.hpp"
 
 namespace json = boost::json;
 namespace model = tcs::model;
 
 using StatusCode = tcs::utils::StatusCode;
 using RoomType = tcs::utils::RoomType;
+using SnowFlake = tcs::utils::SnowFlake;
 
 template <typename Allocator>
 using api_request = http::request<http::string_body, http::basic_fields<Allocator>>;
@@ -325,11 +327,11 @@ private:
                     json::value_to<model::RegisterRequest>(jv);
                 SqlConnRAII conn;
                 std::string hashed_pwd = hash_password(register_request.password);
-                std::string uuid = generate_uuid();
+                u64 id = SnowFlake::next_id();
                 int updated_row = conn.execute_update(
-                    "INSERT INTO users (uuid, username, password_hash, email, nickname) "
+                    "INSERT INTO users (id, username, password_hash, email, nickname) "
                     "VALUES (?, ?, ?, ?, ?)",
-                    uuid, register_request.username, hashed_pwd, register_request.email,
+                    id, register_request.username, hashed_pwd, register_request.email,
                     register_request.nickname);
 
                 if (updated_row == 1) {

@@ -31,7 +31,11 @@ public:
 
     void bind_all_param(PrepStmt* pstmt, int idx, const std::string& str);
 
-    void bind_all_param(PrepStmt* pstmt, int idx, int type) { pstmt->setInt(idx, type); }
+    void bind_all_param(PrepStmt* pstmt, int idx, int value) { pstmt->setInt(idx, value); }
+
+    void bind_all_param(PrepStmt* pstmt, int idx, u64 value) { pstmt->setUInt64(idx, value); }
+
+    void bind_all_param(PrepStmt* pstmt, int idx, i64 value) { pstmt->setInt64(idx, value); }
 
     void bind_all_param(PrepStmt* pstmt, int idx) {}
 

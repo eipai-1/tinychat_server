@@ -6,7 +6,7 @@ namespace utils {
 u64 SnowFlake::service_id_ = INIT_SERVICE_BITS;
 u64 SnowFlake::sequence_id_ = 0;
 i64 SnowFlake::last_timestamp_ = 0;
-u64 SnowFlake::own_epoch_ = 0;
+u64 SnowFlake::custom_epoch_ = 0;
 std::mutex SnowFlake::mtx_;
 u64 SnowFlake::next_id() {
     std::lock_guard<std::mutex> lock(mtx_);
@@ -30,7 +30,7 @@ u64 SnowFlake::next_id() {
         sequence_id_ = 0;
     }
     last_timestamp_ = time_stamp;
-    time_stamp -= own_epoch_;
+    time_stamp -= custom_epoch_;
     time_stamp <<= (SERVICE_BITS + SEQUENCE_BITS);
     u64 service_id = service_id_ << SEQUENCE_BITS;
 

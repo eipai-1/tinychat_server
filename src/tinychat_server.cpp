@@ -10,8 +10,10 @@
 #include "utils/config.hpp"
 #include "db/sql_conn_pool.hpp"
 #include "utils/net_utils.hpp"
+#include "utils/snowflake.hpp"
 
 using AppConfig = tcs::utils::AppConfig;
+using SnowFlake = tcs::utils::SnowFlake;
 
 namespace tcs {
 void TinychatServer::init_log() {
@@ -53,13 +55,16 @@ void TinychatServer::init_log() {
 
 TinychatServer::TinychatServer()
     : ioc_(AppConfig::get().server().io_threads()), listener_(nullptr) {
-    // 初始化日志
+    // 开始初始化
     init_log();
     sodium_init();
 
     db::SqlConnPool::instance()->init();
 
     pool::ThreadPool::init(AppConfig::get().server().worker_threads());
+
+    SnowFlake::init(AppConfig::get().server().service_id(),
+                    AppConfig::get().server().custom_epoch());
 
     listener_ = std::make_shared<core::Listener>(
         ioc_,

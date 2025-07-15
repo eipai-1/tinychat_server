@@ -12,7 +12,7 @@ namespace tcs {
 namespace utils {
 class SnowFlake {
 public:
-    static void init(u64 service_id, u64 own_epoch) {
+    static void init(u64 service_id, u64 custom_epoch) {
         if (service_id_ != INIT_SERVICE_BITS) {
             throw std::runtime_error("SnowFlake has already been initialized. ");
         }
@@ -21,7 +21,7 @@ public:
         }
         service_id_ = service_id;
         last_timestamp_ = time_gen();
-        own_epoch_ = own_epoch;
+        custom_epoch_ = custom_epoch;
     }
 
     static u64 next_id();
@@ -73,7 +73,7 @@ private:
     static u64 service_id_;
     // 上一个生成id的时间戳
     static i64 last_timestamp_;
-    static u64 own_epoch_;
+    static u64 custom_epoch_;
     // 序列号
     static u64 sequence_id_;
     static std::mutex mtx_;
