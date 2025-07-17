@@ -5,13 +5,15 @@
 #include <boost/json.hpp>
 
 #include "utils/enums.hpp"
+#include "utils/types.hpp"
 
 namespace json = boost::json;
 
 namespace tcs {
 namespace model {
 struct ClientPrivateMsg {
-    std::string other_user_uuid;
+    u64 room_id;
+    u64 other_user_id;
     std::string content;
 };
 // inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv, const
@@ -21,17 +23,18 @@ struct ClientPrivateMsg {
 inline ClientPrivateMsg tag_invoke(json::value_to_tag<ClientPrivateMsg>, const json::value& jv) {
     const json::object& obj = jv.as_object();
     return ClientPrivateMsg{
-        .other_user_uuid = json::value_to<std::string>(obj.at("other_user_uuid")),
+        .room_id = std::stoull(json::value_to<std::string>(obj.at("room_id"))),
+        .other_user_id = std::stoull(json::value_to<std::string>(obj.at("other_user_id"))),
         .content = json::value_to<std::string>(obj.at("content"))};
 }
 
 struct ClientGroupMsg {
-    std::string room_uuid;
+    u64 room_id;
     std::string content;
 };
 inline ClientGroupMsg tag_invoke(json::value_to_tag<ClientGroupMsg>, const json::value& jv) {
     const json::object& obj = jv.as_object();
-    return ClientGroupMsg{.room_uuid = json::value_to<std::string>(obj.at("room_uuid")),
+    return ClientGroupMsg{.room_id = json::value_to<u64>(obj.at("room_id")),
                           .content = json::value_to<std::string>(obj.at("content"))};
 }
 
@@ -49,23 +52,25 @@ inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
 }
 
 struct PrivateMsgToSend {
-    std::string sender_uuid;
+    u64 sender_id;
     std::string content;
 };
 inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
                        const PrivateMsgToSend& msg) {
-    jv = boost::json::object{{"receiver_uuid", msg.sender_uuid}, {"content", msg.content}};
+    jv = boost::json::object{{"receiver_id", std::to_string(msg.sender_id)},
+                             {"content", msg.content}};
 }
 
 struct GroupMsgToSend {
-    std::string room_uuid;
-    std::string sender_uuid;
+    u64 room_id;
+    u64 sender_id;
     std::string content;
 };
 inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
                        const GroupMsgToSend& msg) {
-    jv = boost::json::object{
-        {"room_uuid", msg.room_uuid}, {"sender_uuid", msg.sender_uuid}, {"content", msg.content}};
+    jv = boost::json::object{{"room_id", std::to_string(msg.room_id)},
+                             {"sender_id", std::to_string(msg.sender_id)},
+                             {"content", msg.content}};
 }
 
 }  // namespace model

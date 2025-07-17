@@ -61,16 +61,16 @@ public:
     }
 
     ~WebsocketSession() {
-        spdlog::debug("WebsocketSession for user {} is being destroyed.", user_uuid_);
+        spdlog::debug("WebsocketSession for user {} is being destroyed.", user_claims_.username);
         // 清理会话
-        WSSessionMgr::get().remove_session(user_uuid_);
+        WSSessionMgr::get().remove_session(user_claims_.id);
     };
 
 private:
     websocket::stream<beast::tcp_stream> ws_;
     beast::flat_buffer buffer_;
     std::queue<std::shared_ptr<const std::string>> message_queue_;
-    std::string user_uuid_;
+    UserClaims user_claims_;
 
     void auth_user(const std::string& token);
 

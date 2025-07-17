@@ -39,11 +39,11 @@ UserClaims RequestHandler::extract_user_claims(const std::string& token) {
     if (!decoded_token.has_payload_claim("username")) {
         throw std::runtime_error("Token does not contain username claim");
     }
-    std::string uuid = decoded_token.get_subject();
+    u64 id = std::stoull(decoded_token.get_subject());
     std::string username = decoded_token.get_payload_claim("username").as_string();
 
     return UserClaims{
-        .uuid = uuid,
+        .id = id,
         .username = username,
     };
 }
@@ -100,8 +100,7 @@ std::string RequestHandler::bytes_to_hex(const unsigned char* bytes, std::size_t
     return ss.str();
 }
 
-std::string RequestHandler::generate_login_token(const std::string& username,
-                                                 const std::string& uuid) {
+std::string RequestHandler::generate_login_token(const std::string& username, u64 id) {
     const std::string jwt_secret = AppConfig::get().server().jwt_secret();
 
     using traits = jwt::traits::boost_json;
@@ -109,13 +108,13 @@ std::string RequestHandler::generate_login_token(const std::string& username,
     auto token = jwt::create<traits>()
                      .set_type("JWS")
                      .set_issuer("tinychat_server")
-                     .set_subject(uuid)
+                     .set_subject(std::to_string(id))
                      //.set_id(std::to_string(user_id))
-                     .set_expires_at(std::chrono::system_clock::now() + std::chrono::hours(24) * 7)
+                     .set_expires_at(std::chrono::system_clock::now() + std::chrono::hours(24) * 30)
                      .set_payload_claim("username", jwt::basic_claim<traits>(username))
                      .sign(jwt::algorithm::hs256{jwt_secret});
 
-    spdlog::debug("Generated JWT token: {} for {}", token, username);
+    spdlog::debug("Generated JWT token:\"{}\" for \"{}\"", token, username);
 
     return token;
 }

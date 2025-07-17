@@ -1,6 +1,8 @@
 #pragma once
 #include <string>
 #include <cstdint>
+#include <vector>
+
 #include <boost/json.hpp>
 
 namespace json = boost::json;
@@ -19,42 +21,56 @@ inline CreateGRoomReq tag_invoke(boost::json::value_to_tag<CreateGRoomReq>,
 }
 
 struct CreateGRoomResp {
-    std::string room_uuid;
+    u64 room_id;
 };
 inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
                        const CreateGRoomResp& resp) {
-    jv = json::object{{"room_uuid", resp.room_uuid}};
+    jv = json::object{{"room_id", std::to_string(resp.room_id)}};
 }
 
 // Create private room Request
 struct CreatePRoomReq {
-    std::string other_uuid;
+    u64 other_id;
 };
 inline CreatePRoomReq tag_invoke(boost::json::value_to_tag<CreatePRoomReq>,
                                  const boost::json::value& jv) {
     const json::object obj = jv.as_object();
-    return CreatePRoomReq{.other_uuid = json::value_to<std::string>(obj.at("other_uuid"))};
+    return CreatePRoomReq{.other_id = std::stoull(json::value_to<std::string>(obj.at("other_id")))};
 }
 
 struct CreatePRoomResp {
-    std::string room_uuid;
+    u64 room_id;
 };
 inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
                        const CreatePRoomResp& resp) {
-    jv = json::object{{"room_uuid", resp.room_uuid}};
+    jv = json::object{{"room_id", std::to_string(resp.room_id)}};
 }
 
 // Group Room Invitation Request
 struct GRoomInvtReq {
-    std::string invitee_uuid;
+    u64 invitee_id;
 };
 inline GRoomInvtReq tag_invoke(boost::json::value_to_tag<GRoomInvtReq>,
                                const boost::json::value& jv) {
     const json::object obj = jv.as_object();
     return GRoomInvtReq{
-        .invitee_uuid = json::value_to<std::string>(obj.at("invitee_uuid")),
+        .invitee_id = std::stoull(json::value_to<std::string>(obj.at("invitee_id"))),
     };
 }
+
+struct Room {
+    u64 id;
+    i8 type;
+    std::string name;
+    std::string description;
+    std::string avatar_url;
+    u64 last_message_id;
+    i32 member_count;
+};
+
+struct QueryRoomsResp {
+    std::vector<Room> rooms;
+};
 
 }  // namespace model
 }  // namespace tcs
