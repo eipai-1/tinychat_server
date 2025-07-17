@@ -119,5 +119,41 @@ std::string RequestHandler::generate_login_token(const std::string& username, u6
     return token;
 }
 
+http::response<http::string_body> RequestHandler::error_resp(const ReqContext& ctx, StatusCode code,
+                                                             const std::string& msg) {
+    http::response<http::string_body> res;
+    switch (code) {
+        case StatusCode::BadRequest:
+            res = http::response<http::string_body>{http::status::bad_request, ctx.version};
+            break;
+
+        case StatusCode::InternalServerError:
+            res =
+                http::response<http::string_body>{http::status::internal_server_error, ctx.version};
+            break;
+
+        case StatusCode::Forbidden:
+            res = http::response<http::string_body>{http::status::forbidden, ctx.version};
+            break;
+
+        default:
+            res =
+                http::response<http::string_body>{http::status::internal_server_error, ctx.version};
+            spdlog::error("Unhandled status code: {}", static_cast<int>(code));
+    }
+    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+    res.set(http::field::content_type, "application/json");
+    res.keep_alive(ctx.keep_alive);
+
+    json::object obj;
+    obj["code"] = static_cast<int>(code);
+    obj["message"] = "Bad Request" + msg;
+    obj["data"] = nullptr;
+    res.body() = json::serialize(obj);
+
+    res.prepare_payload();
+    return res;
+}
+
 }  // namespace core
 }  // namespace tcs

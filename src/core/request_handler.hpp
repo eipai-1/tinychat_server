@@ -43,11 +43,15 @@ struct ApiResponse {
     T data;
 };
 
+// 准备重构
+
+// Request context
 struct ReqContext {
     unsigned version;
     bool keep_alive;
+    http::verb method;
     std::string target;
-    std::optional<std::string> body_opt;
+    std::optional<json::value> jv_opt;
     std::optional<UserClaims> user_claims_opt;
 };
 
@@ -58,8 +62,9 @@ public:
                                                   api_request<Allocator>&& req) {
         ReqContext ctx{.version = req.version(),
                        .keep_alive = req.keep_alive(),
+                       .method = req.method(),
                        .target = std::string(req.target()),
-                       .body_opt = std::nullopt,
+                       .jv_opt = std::nullopt,
                        .user_claims_opt = std::nullopt};
 
         if (req.find(http::field::authorization) != req.end()) {
@@ -67,7 +72,7 @@ public:
         }
 
         if (!req.body().empty()) {
-            ctx.body_opt = std::string(req.body());
+            ctx.jv_opt = json::parse(req.body());
         }
 
         if (req.target() == "/api/login") {
@@ -81,7 +86,7 @@ public:
         } else if (req.target().starts_with("/api/rooms/")) {
             return handle_chat_room(std::move(req));
         } else if (req.target() == "/users/me/rooms") {
-            return query_rooms(std::move(req));
+            return query_rooms(ctx);
         } else {
             spdlog::warn("Unhandled request: {}", req.target());
             return bad_request(std::move(req), " Not Found");
@@ -165,12 +170,10 @@ private:
 
             spdlog::info("Created group room: {}, owner: {}", room_id, user_claims.username);
 
-            u64 room_members_id = SnowFlake::next_id();
             // 2.添加创建者为群主
             int updated_row2 = conn.execute_update(
-                "INSERT INTO room_members (id, room_id, user_id, role) VALUES (?, ?, ?, ?)",
-                room_members_id, room_id, user_claims.id,
-                static_cast<int>(utils::GroupRole::OWNER));
+                "INSERT INTO room_members (room_id, user_id, role) VALUES (?, ?, ?)", room_id,
+                user_claims.id, static_cast<int>(utils::GroupRole::OWNER));
 
             if (updated_row2 != 1) {
                 throw std::runtime_error("Failed to add owner to group room");
@@ -223,15 +226,13 @@ private:
 
             spdlog::info("Created private room: {}", room_id);
 
-            u64 room_members_id1 = SnowFlake::next_id();
-            u64 room_members_id2 = SnowFlake::next_id();
             // 2.添加创建者为群主
             int updated_row2 = conn.execute_update(
-                "INSERT INTO room_members (id, room_id, user_id, role)"
-                "VALUES (?, ?, ?, ?), (?, ?, ?, ?)",
-                room_members_id1, room_id, user_claims.id,
-                static_cast<int>(utils::GroupRole::PRIVATE_MEMBER), room_members_id2, room_id,
-                create_p_room_req.other_id, static_cast<int>(utils::GroupRole::PRIVATE_MEMBER));
+                "INSERT INTO room_members (room_id, user_id, role)"
+                "VALUES (?, ?, ?), (?, ?, ?)",
+                room_id, user_claims.id, static_cast<int>(utils::GroupRole::PRIVATE_MEMBER),
+                room_id, create_p_room_req.other_id,
+                static_cast<int>(utils::GroupRole::PRIVATE_MEMBER));
 
             if (updated_row2 != 2) {
                 throw std::runtime_error("Failed to add owner to group room");
@@ -270,7 +271,7 @@ private:
                     return delete_room(std::move(req), room_id);
                 }
             } else if (room_verb == "member") {
-                return invie_member(std::move(req), room_id);
+                return invite_member(std::move(req), room_id);
             } else {
                 return bad_request(std::move(req), " target not found");
             }
@@ -342,7 +343,7 @@ private:
     }
 
     template <typename Allocator>
-    static http::message_generator invie_member(api_request<Allocator>&& req, u64 room_id) {
+    static http::message_generator invite_member(api_request<Allocator>&& req, u64 room_id) {
         if (req.method() != http::verb::post) {
             return bad_request(std::move(req), " Method Not Allowed");
         }
@@ -353,7 +354,7 @@ private:
         UserClaims user_claims = extract_user_claims(std::string(req[http::field::authorization]));
 
         std::unique_ptr<sql::ResultSet> result_set(
-            conn.execute_query("SELECT 1 FROM rooms WHERE id = ?", room_id));
+            conn.execute_query("SELECT type FROM rooms WHERE id = ?", room_id));
 
         if (!result_set->next()) {
             spdlog::error("user {} trying to invited {} to a not found room {}", user_claims.id,
@@ -364,11 +365,12 @@ private:
         if (result_set->getInt("type") != static_cast<int>(RoomType::GROUP)) {
             spdlog::error("user {} trying to invited {} to a private room {}", user_claims.id,
                           invt_req.invitee_id, room_id);
-            return bad_request(std::move(req), " Not a group room");
+            return error_resp(std::move(req), StatusCode::BadRequest, " Illegal request");
         }
 
+        // 此处数据库约束会帮我们确保不会重复添加同一个成员
         int update_row = conn.execute_update(
-            "INSERT INTO room_members (room_id, user_uuid, role) VALUE (?, ?, ?)", room_id,
+            "INSERT INTO room_members (room_id, user_id, role) VALUE (?, ?, ?)", room_id,
             invt_req.invitee_id, static_cast<int>(utils::GroupRole::MEMBER));
 
         if (update_row != 1) {
@@ -441,6 +443,9 @@ private:
         return res;
     }
 
+    static http::response<http::string_body> error_resp(const ReqContext& ctx, StatusCode code,
+                                                        const std::string& msg = std::string(""));
+
     template <typename Allocator>
     static http::message_generator handle_login(api_request<Allocator>&& req) {
         if (req.method() == http::verb::post) {
@@ -491,15 +496,15 @@ private:
         }
     }
 
-    template <typename Allocator>
-    static http::message_generator query_rooms(api_request<Allocator>&& req) {
+    static http::message_generator query_rooms(const ReqContext& ctx) {
         try {
-            if (req.method() != http::verb::get) {
-                return bad_request(std::move(req), " Method Not Allowed");
+            if (ctx.method != http::verb::get) {
+                return error_resp(ctx, StatusCode::BadRequest, " Method Not Allowed");
             }
+
         } catch (const std::exception& e) {
             spdlog::error("Exception in query_rooms: {}", e.what());
-            return bad_request(std::move(req), " Server Error");
+            return error_resp(ctx, StatusCode::InternalServerError, " Server Error");
         }
     }
 
