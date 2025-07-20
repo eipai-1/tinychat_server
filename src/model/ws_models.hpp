@@ -34,7 +34,7 @@ struct ClientGroupMsg {
 };
 inline ClientGroupMsg tag_invoke(json::value_to_tag<ClientGroupMsg>, const json::value& jv) {
     const json::object& obj = jv.as_object();
-    return ClientGroupMsg{.room_id = json::value_to<u64>(obj.at("room_id")),
+    return ClientGroupMsg{.room_id = std::stoull(json::value_to<std::string>(obj.at("room_id"))),
                           .content = json::value_to<std::string>(obj.at("content"))};
 }
 
@@ -52,12 +52,12 @@ inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
 }
 
 struct PrivateMsgToSend {
-    u64 sender_id;
+    u64 private_room_id;
     std::string content;
 };
 inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
                        const PrivateMsgToSend& msg) {
-    jv = boost::json::object{{"receiver_id", std::to_string(msg.sender_id)},
+    jv = boost::json::object{{"private_room_id", std::to_string(msg.private_room_id)},
                              {"content", msg.content}};
 }
 

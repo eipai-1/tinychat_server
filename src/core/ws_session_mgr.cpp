@@ -46,7 +46,7 @@ void WSSessionMgr::write_to_room(u64 room_id, const std::string& msg) {
     {
         SqlConnRAII conn;
         std::unique_ptr<sql::ResultSet> res(
-            conn.execute_query("SELECT user_uuid FROM room_members WHERE room_uuid = ?", room_id));
+            conn.execute_query("SELECT user_id FROM room_members WHERE room_id = ?", room_id));
 
         while (res->next()) {
             u64 user_id = res->getUInt64("user_id");

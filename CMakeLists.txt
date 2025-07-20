@@ -43,6 +43,7 @@ set(HEADERS
     src/model/auth_models.hpp
     src/model/ws_models.hpp
     src/model/chat_models.hpp
+    src/model/user.hpp
 )
 
 set(SOURCES

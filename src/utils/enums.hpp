@@ -49,6 +49,8 @@ enum class ServerRespType : int {
 
     // Group Message To Send
     GMsgToSend = 3,
+
+    PermissionDenied = 4,
 };
 inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
                        const ServerRespType& type) {

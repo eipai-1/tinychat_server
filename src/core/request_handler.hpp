@@ -17,6 +17,7 @@
 #include "db/sql_conn_RAII.hpp"
 #include "model/auth_models.hpp"
 #include "model/chat_models.hpp"
+#include "model/user.hpp"
 #include "utils/types.hpp"
 #include "utils/snowflake.hpp"
 
@@ -32,7 +33,10 @@ using api_request = http::request<http::string_body, http::basic_fields<Allocato
 
 using SqlConnPool = tcs::db::SqlConnPool;
 using SqlConnRAII = tcs::db::SqlConnRAII;
+
+using User = tcs::model::User;
 using UserClaims = tcs::model::UserClaims;
+using LoginResp = tcs::model::LoginResp;
 
 namespace tcs {
 namespace core {
@@ -463,12 +467,13 @@ private:
 
             SqlConnRAII conn;
 
-            std::unique_ptr<sql::ResultSet> result_set(conn.execute_query(
-                "SELECT * FROM users WHERE username = ?", login_request.username));
+            std::unique_ptr<sql::ResultSet> result_set(
+                conn.execute_query("SELECT id, password_hash, nickname, email, avatar_url, created_at FROM "
+                                   "users WHERE username = ?",
+                                   login_request.username));
 
             if (result_set->next()) {
                 std::string hasd_pwd = result_set->getString("password_hash");
-                u64 id = result_set->getUInt64("id");
 
                 if (!verify_password(login_request.password, hasd_pwd)) {
                     spdlog::debug("Login failed for username: {}, password incorrect.",
@@ -477,8 +482,21 @@ private:
                     return create_json_response(http::status::unauthorized, req.version(),
                                                 req.keep_alive(), json::value_from(resp));
                 }
-                std::string token = generate_login_token(login_request.username, id);
-                ApiResponse resp{StatusCode::Success, "Login successful", token};
+
+                User user{
+                    .id = result_set->getUInt64("id"),
+                    .username = login_request.username,
+                    .nickname = result_set->getString("nickname"),
+                    .email = result_set->getString("email"),
+                    .avatar_url = result_set->getString("avatar_url"),
+                    .created_at = result_set->getString("created_at"),
+                };
+
+                std::string token = generate_login_token(login_request.username, user.id);
+
+                LoginResp login_resp{.token = token, .user = user};
+
+                ApiResponse resp{StatusCode::Success, "Login successful", login_resp};
 
                 return create_json_response(http::status::ok, req.version(), req.keep_alive(),
                                             json::value_from(resp));

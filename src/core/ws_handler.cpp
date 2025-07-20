@@ -21,11 +21,12 @@ using UserClaims = tcs::model::UserClaims;
 
 namespace tcs {
 namespace core {
-void WSHandler::handle_message(const std::string& msg_ptr, UserClaims user_claims) {
+void WSHandler::handle_message(const std::string& msg, UserClaims user_claims) {
     SqlConnRAII conn;
+    conn.begin_transaction();
     try {
-        std::string user_id_str = std::to_string(user_claims.id);
-        json::value jv = json::parse(msg_ptr);
+        // std::string user_id_str = std::to_string(user_claims.id);
+        json::value jv = json::parse(msg);
 
         if (!jv.is_object()) {
             throw std::runtime_error("Invalid JSON format in WebSocket message");
@@ -39,12 +40,26 @@ void WSHandler::handle_message(const std::string& msg_ptr, UserClaims user_claim
 
         std::string type = obj.at("type").as_string().c_str();
 
-        conn.begin_transaction();
-
         if (type == "private_message") {
             // todo: 好友检测
+
             model::ClientPrivateMsg private_msg =
                 json::value_to<model::ClientPrivateMsg>(jv.at("data"));
+
+            // 权限检测，必须为房间成员才能发送消息
+            bool is_member_in_room =
+                conn.execute_query("SELECT 1 FROM room_members WHERE room_id = ? AND user_id = ?",
+                                   private_msg.room_id, user_claims.id)
+                    ->next();
+
+            if (!is_member_in_room) {
+                WSSessionMgr::get().write_to(
+                    user_claims.id,
+                    json::serialize(json::value_from(model::ServerRespMsg<std::nullptr_t>{
+                        .type = utils::ServerRespType::PermissionDenied, .data = nullptr})));
+                return;
+            }
+
             u64 msg_id = SnowFlake::next_id();
 
             int updated_row1 = conn.execute_update(
@@ -73,11 +88,11 @@ void WSHandler::handle_message(const std::string& msg_ptr, UserClaims user_claim
 
             model::ServerRespMsg<model::PrivateMsgToSend> private_msg_to_send = {
                 .type = utils::ServerRespType::PMsgToSend,
-                .data = model::PrivateMsgToSend{.sender_id = user_claims.id,
+                .data = model::PrivateMsgToSend{.private_room_id = private_msg.room_id,
                                                 .content = private_msg.content}};
 
-            model::ServerRespMsg<std::string> msg_sent_info = {
-                .type = utils::ServerRespType::MsgSentInfo, .data = std::string("")};
+            model::ServerRespMsg<std::nullptr_t> msg_sent_info = {
+                .type = utils::ServerRespType::MsgSentInfo, .data = nullptr};
 
             WSSessionMgr::get().write_to(private_msg.other_user_id,
                                          json::serialize(json::value_from(private_msg_to_send)));
@@ -88,6 +103,20 @@ void WSHandler::handle_message(const std::string& msg_ptr, UserClaims user_claim
 
         } else if (type == "group_message") {
             model::ClientGroupMsg group_msg = json::value_to<model::ClientGroupMsg>(jv.at("data"));
+
+            // 权限检测，必须为房间成员才能发送消息
+            bool is_member_in_room =
+                conn.execute_query("SELECT 1 FROM room_members WHERE room_id = ? AND user_id = ?",
+                                   group_msg.room_id, user_claims.id)
+                    ->next();
+
+            if (!is_member_in_room) {
+                WSSessionMgr::get().write_to(
+                    user_claims.id,
+                    json::serialize(json::value_from(model::ServerRespMsg<std::nullptr_t>{
+                        .type = utils::ServerRespType::PermissionDenied, .data = nullptr})));
+                return;
+            }
 
             u64 msg_id = SnowFlake::next_id();
             int updated_row1 = conn.execute_update(
