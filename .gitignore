@@ -4,7 +4,8 @@ CMakeUserPresets.json
 linux-CMakeLists.txt
 api.md
 .vs/
-doc/logs/
+doc/
 temp/
 python_scripts/
 CMakeUserPresets.json
+!doc/config.ini

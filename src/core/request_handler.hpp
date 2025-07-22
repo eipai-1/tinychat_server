@@ -2,6 +2,7 @@
 
 #include <string>
 #include <optional>
+#include <vector>
 
 #include <cstddef>
 #include <boost/json.hpp>
@@ -18,6 +19,7 @@
 #include "model/auth_models.hpp"
 #include "model/chat_models.hpp"
 #include "model/user.hpp"
+#include "model/room.hpp"
 #include "utils/types.hpp"
 #include "utils/snowflake.hpp"
 
@@ -37,6 +39,7 @@ using SqlConnRAII = tcs::db::SqlConnRAII;
 using User = tcs::model::User;
 using UserClaims = tcs::model::UserClaims;
 using LoginResp = tcs::model::LoginResp;
+using Room = model::Room;
 
 namespace tcs {
 namespace core {
@@ -91,6 +94,8 @@ public:
             return handle_chat_room(std::move(req));
         } else if (req.target() == "/users/me/rooms") {
             return query_rooms(ctx);
+        } else if (req.target().starts_with("/assets")) {
+            return handle_assets(ctx);
         } else {
             spdlog::warn("Unhandled request: {}", req.target());
             return bad_request(std::move(req), " Not Found");
@@ -117,6 +122,8 @@ private:
     static bool verify_password(const std::string& plain_password, const std::string& stored_hash);
 
     static std::string generate_login_token(const std::string& username, u64 id);
+
+    static std::string_view mime_type(std::string_view path);
 
     static http::response<http::string_body> create_json_response(http::status status,
                                                                   unsigned version, bool keep_alive,
@@ -467,10 +474,10 @@ private:
 
             SqlConnRAII conn;
 
-            std::unique_ptr<sql::ResultSet> result_set(
-                conn.execute_query("SELECT id, password_hash, nickname, email, avatar_url, created_at FROM "
-                                   "users WHERE username = ?",
-                                   login_request.username));
+            std::unique_ptr<sql::ResultSet> result_set(conn.execute_query(
+                "SELECT id, password_hash, nickname, email, avatar_url, created_at FROM "
+                "users WHERE username = ?",
+                login_request.username));
 
             if (result_set->next()) {
                 std::string hasd_pwd = result_set->getString("password_hash");
@@ -519,6 +526,16 @@ private:
             if (ctx.method != http::verb::get) {
                 return error_resp(ctx, StatusCode::BadRequest, " Method Not Allowed");
             }
+
+            std::vector<Room> rooms;
+            SqlConnRAII conn;
+
+            // std::unique_ptr<sql::ResultSet> result_set(
+            //     conn.execute_query("SELECT id, name, type, description, avatar_url, "
+            //                        "last_message_id, memeber_cout, created_at FROM users WHERE"
+            //                        ));
+            std::unique_ptr<sql::ResultSet> room_ids(conn.execute_query(
+                "SELECT room_id FROM room_members WHERE user_id = ?", ctx.user_claims_opt->id));
 
         } catch (const std::exception& e) {
             spdlog::error("Exception in query_rooms: {}", e.what());
@@ -578,6 +595,8 @@ private:
             return bad_request(std::move(req));
         }
     }
+
+    static http::message_generator handle_assets(const ReqContext& ctx);
 };
 
 template <typename T>

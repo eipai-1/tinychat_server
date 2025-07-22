@@ -1,5 +1,7 @@
 #include <string>
 #include <chrono>
+#include <filesystem>
+
 #include <boost/json.hpp>
 #include "jwt-cpp/jwt.h"
 #include "jwt-cpp/traits/boost-json/traits.h"
@@ -136,6 +138,10 @@ http::response<http::string_body> RequestHandler::error_resp(const ReqContext& c
             res = http::response<http::string_body>{http::status::forbidden, ctx.version};
             break;
 
+        case StatusCode::NotFound:
+            res = http::response<http::string_body>{http::status::not_found, ctx.version};
+            break;
+
         default:
             res =
                 http::response<http::string_body>{http::status::internal_server_error, ctx.version};
@@ -153,6 +159,89 @@ http::response<http::string_body> RequestHandler::error_resp(const ReqContext& c
 
     res.prepare_payload();
     return res;
+}
+
+std::string_view RequestHandler::mime_type(std::string_view path) {
+    using boost::beast::iequals;
+    auto const ext = [&path] {
+        auto const pos = path.rfind(".");
+        if (pos == std::string_view::npos) return std::string_view{};
+        return path.substr(pos);
+    }();
+
+    if (iequals(ext, ".htm")) return "text/html";
+    if (iequals(ext, ".html")) return "text/html";
+    if (iequals(ext, ".php")) return "text/html";
+    if (iequals(ext, ".css")) return "text/css";
+    if (iequals(ext, ".txt")) return "text/plain";
+    if (iequals(ext, ".js")) return "application/javascript";
+    if (iequals(ext, ".json")) return "application/json";
+    if (iequals(ext, ".xml")) return "application/xml";
+    if (iequals(ext, ".swf")) return "application/x-shockwave-flash";
+    if (iequals(ext, ".flv")) return "video/x-flv";
+    if (iequals(ext, ".png")) return "image/png";
+    if (iequals(ext, ".jpe")) return "image/jpeg";
+    if (iequals(ext, ".jpeg")) return "image/jpeg";
+    if (iequals(ext, ".jpg")) return "image/jpeg";
+    if (iequals(ext, ".gif")) return "image/gif";
+    if (iequals(ext, ".bmp")) return "image/bmp";
+    if (iequals(ext, ".ico")) return "image/vnd.microsoft.icon";
+    if (iequals(ext, ".tiff")) return "image/tiff";
+    if (iequals(ext, ".tif")) return "image/tiff";
+    if (iequals(ext, ".svg")) return "image/svg+xml";
+    if (iequals(ext, ".svgz")) return "image/svg+xml";
+    return "application/octet-stream";  // 默认的二进制流类型
+}
+
+http::message_generator RequestHandler::handle_assets(const ReqContext& ctx) {
+    try {
+        if (ctx.method != http::verb::get) {
+            return error_resp(ctx, StatusCode::BadRequest, " Method Not Allowed");
+        }
+        std::string_view asset_path = ctx.target;          // 先创建一个副本或引用
+        asset_path.remove_prefix(sizeof("/assets/") - 1);  // -1 是为了去掉字符串末尾的 '\0'
+
+        if (asset_path.empty() || asset_path.find("..") != std::string_view::npos) {
+            return error_resp(ctx, StatusCode::BadRequest, " Invalid asset path");
+        }
+
+        std::string utf8_path_str = AppConfig::get().server().doc_root() + std::string(asset_path);
+
+        std::filesystem::path asset_file_path(asset_path);
+        std::filesystem::path doc_root_path(AppConfig::get().server().doc_root());
+        std::filesystem::path full_path = doc_root_path / asset_file_path;
+
+        http::file_body::value_type body;
+        beast::error_code ec;
+
+        std::u8string path_for_beast = full_path.u8string();
+
+        body.open(reinterpret_cast<const char*>(path_for_beast.data()), beast::file_mode::scan, ec);
+
+        if (ec == beast::errc::no_such_file_or_directory) {
+            spdlog::warn("Asset file not found: {}", utf8_path_str);
+            return error_resp(ctx, StatusCode::NotFound, " Asset not found");
+        }
+
+        if (ec) {
+            throw std::runtime_error("Failed to open asset file: " + ec.message());
+        }
+
+        auto const size = body.size();
+
+        http::response<http::file_body> res{std::piecewise_construct,
+                                            std::make_tuple(std::move(body)),
+                                            std::make_tuple(http::status::ok, ctx.version)};
+        res.set(http::field::server, "TinyChatServer");
+        res.set(http::field::content_type, mime_type(utf8_path_str));
+        res.set(http::field::content_length, std::to_string(size));
+        res.keep_alive(ctx.keep_alive);
+
+        return res;
+    } catch (const std::exception& e) {
+        spdlog::error("Exception in handle_assets: {}", e.what());
+        return error_resp(ctx, StatusCode::InternalServerError, " Server Error");
+    }
 }
 
 }  // namespace core

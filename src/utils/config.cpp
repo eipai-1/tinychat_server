@@ -36,7 +36,11 @@ void AppConfig::init(const std::string& filename) {
 
         instance_ptr_->server_.host(config_tree.get<std::string>("Server.host"));
         instance_ptr_->server_.port(config_tree.get<unsigned short>("Server.port"));
+#ifdef PLATFORM_WINDOWS
+        instance_ptr_->server_.doc_root("D:\\program\\cpp\\proj\\tinychat_server\\doc\\assets\\");
+#else
         instance_ptr_->server_.doc_root(config_tree.get<std::string>("Server.doc_root"));
+#endif
         instance_ptr_->server_.io_threads(config_tree.get<unsigned int>("Server.io_threads"));
         instance_ptr_->server_.worker_threads(
             config_tree.get<unsigned int>("Server.worker_threads"));

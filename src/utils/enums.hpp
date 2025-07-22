@@ -11,6 +11,7 @@ enum class StatusCode : int {
     // 通用错误
     Forbidden = 403,
     BadRequest = 400,
+    NotFound = 404,
     InternalServerError = 500,
 
     // 用户相关

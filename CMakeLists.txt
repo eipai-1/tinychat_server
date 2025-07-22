@@ -44,6 +44,7 @@ set(HEADERS
     src/model/ws_models.hpp
     src/model/chat_models.hpp
     src/model/user.hpp
+    src/model/room.hpp
 )
 
 set(SOURCES
