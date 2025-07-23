@@ -36,13 +36,19 @@ void AppConfig::init(const std::string& filename) {
 
         instance_ptr_->server_.host(config_tree.get<std::string>("Server.host"));
         instance_ptr_->server_.port(config_tree.get<unsigned short>("Server.port"));
+#ifdef PLATFORM_WINDOWS
+        instance_ptr_->server_.doc_root("D:\\program\\cpp\\proj\\tinychat_server\\doc\\assets\\");
+#else
         instance_ptr_->server_.doc_root(config_tree.get<std::string>("Server.doc_root"));
+#endif
         instance_ptr_->server_.io_threads(config_tree.get<unsigned int>("Server.io_threads"));
         instance_ptr_->server_.worker_threads(
             config_tree.get<unsigned int>("Server.worker_threads"));
         instance_ptr_->server_.jwt_secret(config_tree.get<std::string>("Server.jwt_secret"));
         instance_ptr_->server_.log_file(config_tree.get<std::string>("Server.log_file"));
         instance_ptr_->server_.queue_limit(config_tree.get<unsigned int>("Server.queue_limit"));
+        instance_ptr_->server_.custom_epoch(config_tree.get<u64>("Server.custom_epoch"));
+        instance_ptr_->server_.service_id(config_tree.get<u64>("Server.service_id"));
 
     } catch (const pt::ptree_error& e) {
         // 捕获所有 property_tree 相关的错误

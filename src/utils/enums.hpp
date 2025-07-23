@@ -9,7 +9,10 @@ enum class StatusCode : int {
     Success = 0,
 
     // 通用错误
-    BadRequest = 1000,
+    Forbidden = 403,
+    BadRequest = 400,
+    NotFound = 404,
+    InternalServerError = 500,
 
     // 用户相关
     LoginFailed = 1001,
@@ -31,9 +34,10 @@ enum class RoomType : int {
 };
 
 enum class GroupRole : int {
-    OWNER = 3,   // 群主
-    ADMIN = 2,   // 管理员
-    MEMBER = 1,  // 普通成员
+    OWNER = 3,           // 群主
+    ADMIN = 2,           // 管理员
+    MEMBER = 1,          // 普通成员
+    PRIVATE_MEMBER = 0,  // 私聊成员
 };
 
 enum class ServerRespType : int {
@@ -46,6 +50,8 @@ enum class ServerRespType : int {
 
     // Group Message To Send
     GMsgToSend = 3,
+
+    PermissionDenied = 4,
 };
 inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
                        const ServerRespType& type) {

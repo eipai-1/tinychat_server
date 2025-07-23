@@ -1,5 +1,7 @@
 #include <string>
 #include <chrono>
+#include <filesystem>
+
 #include <boost/json.hpp>
 #include "jwt-cpp/jwt.h"
 #include "jwt-cpp/traits/boost-json/traits.h"
@@ -39,11 +41,11 @@ UserClaims RequestHandler::extract_user_claims(const std::string& token) {
     if (!decoded_token.has_payload_claim("username")) {
         throw std::runtime_error("Token does not contain username claim");
     }
-    std::string uuid = decoded_token.get_subject();
+    u64 id = std::stoull(decoded_token.get_subject());
     std::string username = decoded_token.get_payload_claim("username").as_string();
 
     return UserClaims{
-        .uuid = uuid,
+        .id = id,
         .username = username,
     };
 }
@@ -100,8 +102,7 @@ std::string RequestHandler::bytes_to_hex(const unsigned char* bytes, std::size_t
     return ss.str();
 }
 
-std::string RequestHandler::generate_login_token(const std::string& username,
-                                                 const std::string& uuid) {
+std::string RequestHandler::generate_login_token(const std::string& username, u64 id) {
     const std::string jwt_secret = AppConfig::get().server().jwt_secret();
 
     using traits = jwt::traits::boost_json;
@@ -109,15 +110,138 @@ std::string RequestHandler::generate_login_token(const std::string& username,
     auto token = jwt::create<traits>()
                      .set_type("JWS")
                      .set_issuer("tinychat_server")
-                     .set_subject(uuid)
+                     .set_subject(std::to_string(id))
                      //.set_id(std::to_string(user_id))
-                     .set_expires_at(std::chrono::system_clock::now() + std::chrono::hours(24) * 7)
+                     .set_expires_at(std::chrono::system_clock::now() + std::chrono::hours(24) * 30)
                      .set_payload_claim("username", jwt::basic_claim<traits>(username))
                      .sign(jwt::algorithm::hs256{jwt_secret});
 
-    spdlog::debug("Generated JWT token: {} for {}", token, username);
+    spdlog::debug("Generated JWT token:\"{}\" for \"{}\"", token, username);
 
     return token;
+}
+
+http::response<http::string_body> RequestHandler::error_resp(const ReqContext& ctx, StatusCode code,
+                                                             const std::string& msg) {
+    http::response<http::string_body> res;
+    switch (code) {
+        case StatusCode::BadRequest:
+            res = http::response<http::string_body>{http::status::bad_request, ctx.version};
+            break;
+
+        case StatusCode::InternalServerError:
+            res =
+                http::response<http::string_body>{http::status::internal_server_error, ctx.version};
+            break;
+
+        case StatusCode::Forbidden:
+            res = http::response<http::string_body>{http::status::forbidden, ctx.version};
+            break;
+
+        case StatusCode::NotFound:
+            res = http::response<http::string_body>{http::status::not_found, ctx.version};
+            break;
+
+        default:
+            res =
+                http::response<http::string_body>{http::status::internal_server_error, ctx.version};
+            spdlog::error("Unhandled status code: {}", static_cast<int>(code));
+    }
+    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+    res.set(http::field::content_type, "application/json");
+    res.keep_alive(ctx.keep_alive);
+
+    json::object obj;
+    obj["code"] = static_cast<int>(code);
+    obj["message"] = "Bad Request" + msg;
+    obj["data"] = nullptr;
+    res.body() = json::serialize(obj);
+
+    res.prepare_payload();
+    return res;
+}
+
+std::string_view RequestHandler::mime_type(std::string_view path) {
+    using boost::beast::iequals;
+    auto const ext = [&path] {
+        auto const pos = path.rfind(".");
+        if (pos == std::string_view::npos) return std::string_view{};
+        return path.substr(pos);
+    }();
+
+    if (iequals(ext, ".htm")) return "text/html";
+    if (iequals(ext, ".html")) return "text/html";
+    if (iequals(ext, ".php")) return "text/html";
+    if (iequals(ext, ".css")) return "text/css";
+    if (iequals(ext, ".txt")) return "text/plain";
+    if (iequals(ext, ".js")) return "application/javascript";
+    if (iequals(ext, ".json")) return "application/json";
+    if (iequals(ext, ".xml")) return "application/xml";
+    if (iequals(ext, ".swf")) return "application/x-shockwave-flash";
+    if (iequals(ext, ".flv")) return "video/x-flv";
+    if (iequals(ext, ".png")) return "image/png";
+    if (iequals(ext, ".jpe")) return "image/jpeg";
+    if (iequals(ext, ".jpeg")) return "image/jpeg";
+    if (iequals(ext, ".jpg")) return "image/jpeg";
+    if (iequals(ext, ".gif")) return "image/gif";
+    if (iequals(ext, ".bmp")) return "image/bmp";
+    if (iequals(ext, ".ico")) return "image/vnd.microsoft.icon";
+    if (iequals(ext, ".tiff")) return "image/tiff";
+    if (iequals(ext, ".tif")) return "image/tiff";
+    if (iequals(ext, ".svg")) return "image/svg+xml";
+    if (iequals(ext, ".svgz")) return "image/svg+xml";
+    return "application/octet-stream";  // 默认的二进制流类型
+}
+
+http::message_generator RequestHandler::handle_assets(const ReqContext& ctx) {
+    try {
+        if (ctx.method != http::verb::get) {
+            return error_resp(ctx, StatusCode::BadRequest, " Method Not Allowed");
+        }
+        std::string_view asset_path = ctx.target;          // 先创建一个副本或引用
+        asset_path.remove_prefix(sizeof("/assets/") - 1);  // -1 是为了去掉字符串末尾的 '\0'
+
+        if (asset_path.empty() || asset_path.find("..") != std::string_view::npos) {
+            return error_resp(ctx, StatusCode::BadRequest, " Invalid asset path");
+        }
+
+        std::string utf8_path_str = AppConfig::get().server().doc_root() + std::string(asset_path);
+
+        std::filesystem::path asset_file_path(asset_path);
+        std::filesystem::path doc_root_path(AppConfig::get().server().doc_root());
+        std::filesystem::path full_path = doc_root_path / asset_file_path;
+
+        http::file_body::value_type body;
+        beast::error_code ec;
+
+        std::u8string path_for_beast = full_path.u8string();
+
+        body.open(reinterpret_cast<const char*>(path_for_beast.data()), beast::file_mode::scan, ec);
+
+        if (ec == beast::errc::no_such_file_or_directory) {
+            spdlog::warn("Asset file not found: {}", utf8_path_str);
+            return error_resp(ctx, StatusCode::NotFound, " Asset not found");
+        }
+
+        if (ec) {
+            throw std::runtime_error("Failed to open asset file: " + ec.message());
+        }
+
+        auto const size = body.size();
+
+        http::response<http::file_body> res{std::piecewise_construct,
+                                            std::make_tuple(std::move(body)),
+                                            std::make_tuple(http::status::ok, ctx.version)};
+        res.set(http::field::server, "TinyChatServer");
+        res.set(http::field::content_type, mime_type(utf8_path_str));
+        res.set(http::field::content_length, std::to_string(size));
+        res.keep_alive(ctx.keep_alive);
+
+        return res;
+    } catch (const std::exception& e) {
+        spdlog::error("Exception in handle_assets: {}", e.what());
+        return error_resp(ctx, StatusCode::InternalServerError, " Server Error");
+    }
 }
 
 }  // namespace core

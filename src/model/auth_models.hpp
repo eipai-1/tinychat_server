@@ -4,6 +4,9 @@
 
 #include "boost/json.hpp"
 
+#include "model/user.hpp"
+#include "utils/types.hpp"
+
 namespace json = boost::json;
 
 namespace tcs {
@@ -22,8 +25,19 @@ struct RegisterRequest {
 };
 RegisterRequest tag_invoke(json::value_to_tag<RegisterRequest>, const json::value& jv);
 
+struct LoginResp {
+    std::string token;
+    User user;
+};
+inline void tag_invoke(json::value_from_tag, json::value& jv, const LoginResp& resp) {
+    jv = json::object{
+        {"token", resp.token},
+        {"user", json::value_from(resp.user)},
+    };
+}
+
 struct UserClaims {
-    std::string uuid;
+    u64 id;
     std::string username;
 };
 

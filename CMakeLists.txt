@@ -38,10 +38,13 @@ set(HEADERS
     src/utils/enums.hpp
     src/utils/net_utils.hpp
     src/utils/config.hpp
+    src/utils/snowflake.hpp
     src/utils/types.hpp
     src/model/auth_models.hpp
     src/model/ws_models.hpp
     src/model/chat_models.hpp
+    src/model/user.hpp
+    src/model/room.hpp
 )
 
 set(SOURCES
@@ -56,7 +59,12 @@ set(SOURCES
     src/core/ws_session_mgr.cpp
     src/pool/thread_pool.cpp
     src/utils/config.cpp
+    src/utils/snowflake.cpp
     src/model/auth_models.cpp
+)
+
+set(TESTS
+    tests/snowflake_test.hpp
 )
 
 add_executable(tinychat_server 
@@ -67,19 +75,21 @@ add_executable(tinychat_server
     #src/chat_session.cpp
 )
 
-# --- test client ---
+# --- test_main ---
 
-add_executable(test_client
+add_executable(test_main
     ${SOURCES}
     ${HEADERS}
-    src/test_client.cpp
+    ${TESTS}
+    src/test_main.cpp
 )
 
-target_include_directories(test_client PRIVATE
+target_include_directories(test_main PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/tests
 )
 
-target_link_libraries(test_client PRIVATE
+target_link_libraries(test_main PRIVATE
     Boost::system
     Boost::json
     spdlog::spdlog
@@ -112,7 +122,10 @@ if(WIN32)
         PLATFORM_WINDOWS
         NOMINMAX
     )
-    target_compile_definitions(test_client PRIVATE PLATFORM_WINDOWS)
+    target_compile_definitions(test_main PRIVATE
+        PLATFORM_WINDOWS
+        NOMINMAX
+    )
 
     
     # 你还可以添加其他 Windows 特有的宏
@@ -138,11 +151,11 @@ target_compile_definitions(tinychat_server PRIVATE
     "SEMAPHORE_MAX_VALUE=${SEMAPHORE_MAX_VALUE}"
 )
 
-target_compile_definitions(test_client PRIVATE
+target_compile_definitions(test_main PRIVATE
     "SEMAPHORE_MAX_VALUE=${SEMAPHORE_MAX_VALUE}"
 )
 
-#target_compile_definitions(test_client PRIVATE 
+#target_compile_definitions(test_main PRIVATE 
 #    STATIC_CONCPP
 #    # 把CMake变量变成C++宏
 #    "-DMYSQL_PLUGIN_DIR=\"${mysql-concpp_PLUGIN_DIR}\""

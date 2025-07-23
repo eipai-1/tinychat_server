@@ -10,8 +10,10 @@
 #include "utils/config.hpp"
 #include "db/sql_conn_pool.hpp"
 #include "utils/net_utils.hpp"
+#include "utils/snowflake.hpp"
 
 using AppConfig = tcs::utils::AppConfig;
+using SnowFlake = tcs::utils::SnowFlake;
 
 namespace tcs {
 void TinychatServer::init_log() {
@@ -29,10 +31,11 @@ void TinychatServer::init_log() {
     auto async_logger = spdlog::create_async<spdlog::sinks::daily_file_sink_mt>(
         "daily_logger", AppConfig::get().server().log_file(), 0, 0);
 
+    // 低于设置级别的日志不输出
 #ifndef NDEBUG
     async_logger->set_level(spdlog::level::debug);
 #else
-    async_logger->set_level(spdlog::level::err);
+    async_logger->set_level(spdlog::level::info);
 #endif
 
     spdlog::set_default_logger(async_logger);
@@ -41,6 +44,7 @@ void TinychatServer::init_log() {
 
     spdlog::flush_every(std::chrono::seconds(5));
 
+    // 遇到设置的级别时立即刷新日志
 #ifndef NDEBUG
     spdlog::flush_on(spdlog::level::debug);
 #else
@@ -51,13 +55,16 @@ void TinychatServer::init_log() {
 
 TinychatServer::TinychatServer()
     : ioc_(AppConfig::get().server().io_threads()), listener_(nullptr) {
-    // 初始化日志
+    // 开始初始化
     init_log();
     sodium_init();
 
     db::SqlConnPool::instance()->init();
 
     pool::ThreadPool::init(AppConfig::get().server().worker_threads());
+
+    SnowFlake::init(AppConfig::get().server().service_id(),
+                    AppConfig::get().server().custom_epoch());
 
     listener_ = std::make_shared<core::Listener>(
         ioc_,
