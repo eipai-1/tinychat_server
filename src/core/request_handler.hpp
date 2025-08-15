@@ -92,7 +92,7 @@ public:
             return create_p_room(std::move(req));
         } else if (req.target().starts_with("/api/rooms/")) {
             return handle_chat_room(std::move(req));
-        } else if (req.target() == "/users/me/rooms") {
+        } else if (req.target() == "/me/rooms") {
             return query_rooms(ctx);
         } else if (req.target().starts_with("/assets")) {
             return handle_assets(ctx);
@@ -170,10 +170,13 @@ private:
             UserClaims user_claims =
                 extract_user_claims(std::string(req[http::field::authorization]));
 
+            std::string default_avatar_url =
+                "rooms/default_avatar.png";  // 替换为实际的默认头像 URL
+
             // 1.创建房间
             int updated_row1 = conn.execute_update(
-                "INSERT INTO rooms (id, name, type, owner_id) VALUES (?, ?, ?, ?)", room_id,
-                create_g_room_req.name, static_cast<int>(RoomType::GROUP), user_claims.id);
+                "INSERT INTO rooms (id, name, type, owner_id, avatar_url) VALUES (?, ?, ?, ?, ?)",
+                room_id, create_g_room_req.name, static_cast<int>(RoomType::GROUP), user_claims.id);
 
             if (updated_row1 != 1) {
                 throw std::runtime_error("Failed to create group room");
@@ -521,27 +524,7 @@ private:
         }
     }
 
-    static http::message_generator query_rooms(const ReqContext& ctx) {
-        try {
-            if (ctx.method != http::verb::get) {
-                return error_resp(ctx, StatusCode::BadRequest, " Method Not Allowed");
-            }
-
-            std::vector<Room> rooms;
-            SqlConnRAII conn;
-
-            // std::unique_ptr<sql::ResultSet> result_set(
-            //     conn.execute_query("SELECT id, name, type, description, avatar_url, "
-            //                        "last_message_id, memeber_cout, created_at FROM users WHERE"
-            //                        ));
-            std::unique_ptr<sql::ResultSet> room_ids(conn.execute_query(
-                "SELECT room_id FROM room_members WHERE user_id = ?", ctx.user_claims_opt->id));
-
-        } catch (const std::exception& e) {
-            spdlog::error("Exception in query_rooms: {}", e.what());
-            return error_resp(ctx, StatusCode::InternalServerError, " Server Error");
-        }
-    }
+    static http::message_generator query_rooms(const ReqContext& ctx);
 
     template <typename Allocator>
     static http::message_generator handle_register(api_request<Allocator>&& req) {

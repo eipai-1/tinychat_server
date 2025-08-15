@@ -76,6 +76,8 @@ public:
         for (size_t i = 0; i < values.size(); ++i) {
             bind_all_param(pstmt.get(), i + 1, values[i]);
         }
+
+        return pstmt->executeQuery();
     }
 
     template <typename... Args>

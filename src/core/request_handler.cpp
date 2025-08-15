@@ -244,5 +244,51 @@ http::message_generator RequestHandler::handle_assets(const ReqContext& ctx) {
     }
 }
 
+http::message_generator RequestHandler::query_rooms(const ReqContext& ctx) {
+    try {
+        if (ctx.method != http::verb::get) {
+            return error_resp(ctx, StatusCode::BadRequest, " Method Not Allowed");
+        }
+
+        std::vector<Room> rooms;
+        SqlConnRAII conn;
+
+        // std::unique_ptr<sql::ResultSet> result_set(
+        //     conn.execute_query("SELECT id, name, type, description, avatar_url, "
+        //                        "last_message_id, memeber_cout, created_at FROM users WHERE"
+        //                        ));
+        std::unique_ptr<sql::ResultSet> room_ids(conn.execute_query(
+            "SELECT room_id FROM room_members WHERE user_id = ?", ctx.user_claims_opt->id));
+
+        std::vector<u64> room_id_list;
+
+        while (room_ids->next()) {
+            u64 room_id = room_ids->getUInt64("room_id");
+            room_id_list.push_back(room_id);
+        }
+
+        std::unique_ptr<sql::ResultSet> rooms_rs(conn.execute_query_in(
+            "SELECT id, name, type, description, avatar_url, last_message_id, member_count, "
+            "created_at FROM rooms WHERE id IN",
+            room_id_list));
+
+        std::vector<Room> room_list;
+
+        while (rooms_rs->next()) {
+            Room room = Room::from_result_set(rooms_rs.get());
+            room_list.push_back(room);
+        }
+
+        return create_json_response(
+            http::status::ok, ctx.version, ctx.keep_alive,
+            json::value_from(ApiResponse<std::vector<Room>>{
+                StatusCode::Success, "Rooms retrieved successfully", room_list}));
+
+    } catch (const std::exception& e) {
+        spdlog::error("Exception in query_rooms: {}", e.what());
+        return error_resp(ctx, StatusCode::InternalServerError, " Server Error");
+    }
+}
+
 }  // namespace core
 }  // namespace tcs
