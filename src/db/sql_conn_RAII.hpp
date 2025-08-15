@@ -48,16 +48,38 @@ public:
     // 与标准库作区分
     template <typename... Args>
     sql::ResultSet* execute_query(const std::string& sql_template, const Args&... args) {
-        sql_ = getSql();
         std::unique_ptr<PrepStmt> pstmt(sql_->prepareStatement(sql_template));
         int idx = 0;
         bind_all_param(pstmt.get(), ++idx, args...);
         return pstmt->executeQuery();
     }
 
+    template <typename T>
+    sql::ResultSet* execute_query_in(const std::string& sql_prefix, std::vector<T>& values) {
+        if (values.empty()) {
+            return nullptr;
+        }
+
+        std::string full_sql = sql_prefix + " (";
+
+        for (size_t i = 0; i < values.size(); ++i) {
+            full_sql += "?";
+            if (i != values.size() - 1) {
+                full_sql += ", ";
+            }
+        }
+
+        full_sql += ")";
+
+        std::unique_ptr<PrepStmt> pstmt(sql_->prepareStatement(full_sql));
+
+        for (size_t i = 0; i < values.size(); ++i) {
+            bind_all_param(pstmt.get(), i + 1, values[i]);
+        }
+    }
+
     template <typename... Args>
     int execute_update(const std::string& sql_template, const Args&... args) {
-        sql_ = getSql();
         std::unique_ptr<PrepStmt> pstmt(sql_->prepareStatement(sql_template));
         int idx = 0;
         bind_all_param(pstmt.get(), ++idx, args...);
