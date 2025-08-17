@@ -9,8 +9,10 @@
 #include "core/request_handler.hpp"
 #include "db/sql_conn_RAII.hpp"
 #include "utils/config.hpp"
+#include "model/message.hpp"
 
 using AppConfig = tcs::utils::AppConfig;
+using Message = tcs::model::Message;
 
 namespace tcs {
 namespace core {
@@ -93,6 +95,42 @@ std::string_view RequestHandler::extract_target_param(std::string_view target, s
     return std::string_view();
 }
 
+std::map<std::string, std::string> RequestHandler::extract_target_query_params(
+    std::string_view req_param) {
+    size_t cur{}, start{}, count{};
+    std::map<std::string, std::string> params{};
+    while (cur < req_param.size() && req_param[cur] != '?') {
+        cur++;
+    }
+
+    if (cur != req_param.size()) {
+        cur++;
+    } else {
+        return params;
+    }
+    start = cur;
+    while (cur < req_param.size()) {
+        std::string_view param_name, param_value;
+        while (cur < req_param.size() && req_param[cur] != '=') {
+            cur++;
+        }
+        param_name = req_param.substr(start, cur - start);
+        cur++;
+        start = cur;
+
+        while (cur < req_param.size() && req_param[cur] != '&') {
+            cur++;
+        }
+        param_value = req_param.substr(start, cur - start);
+        cur++;
+        start = cur;
+
+        params[std::string(param_name)] = std::string(param_value);
+    }
+
+    return params;
+}
+
 std::string RequestHandler::bytes_to_hex(const unsigned char* bytes, std::size_t len) {
     std::stringstream ss;
     ss << std::hex << std::setfill('0');
@@ -119,6 +157,67 @@ std::string RequestHandler::generate_login_token(const std::string& username, u6
     spdlog::debug("Generated JWT token:\"{}\" for \"{}\"", token, username);
 
     return token;
+}
+
+http::message_generator RequestHandler::fetch_chat_messages(const ReqContext& ctx,
+                                                            std::string_view req_param,
+                                                            u64 room_id) {
+    try {
+        if (ctx.method != http::verb::get) {
+            return error_resp(ctx, StatusCode::BadRequest, " Method Not Allowed");
+        }
+
+        SqlConnRAII conn;
+
+        // 权限检查
+        std::unique_ptr<sql::ResultSet> role_set(
+            conn.execute_query("SELECT role FROM room_members WHERE room_id = ? AND user_id = ?",
+                               room_id, ctx.user_claims_opt.value().id));
+        if (!role_set->next()) {
+            spdlog::warn("User {} trying to access messages in room {} without permission",
+                         ctx.user_claims_opt.value().id, room_id);
+            return error_resp(ctx, StatusCode::Forbidden, " Permission denied");
+        }
+
+        auto query_params = extract_target_query_params(req_param);
+
+        u64 before_id = 0;
+        if (query_params.count("before")) {
+            before_id = std::stoull(query_params["before"]);
+        }
+        before_id = std::stoull(query_params["before"]);
+        int limit = std::stoi(query_params["limit"]);
+        if (limit <= 0 || limit > 100) {
+            limit = 50;  // 默认限制为50条
+        }
+        std::unique_ptr<sql::ResultSet> messgaes_rs;
+        if (before_id == 0) {
+            messgaes_rs = std::make_unique<sql::ResultSet>(conn.execute_query(
+                "SELECT id, room_id, sender_id, content_type, content, created_at FROM messages"
+                " WHERE room_id = ? ORDER BY id DESC LIMIT ?",
+                room_id, limit));
+
+        } else {
+            messgaes_rs = std::make_unique<sql::ResultSet>(conn.execute_query(
+                "SELECT id, room_id, sender_id, content_type, content, created_at FROM messages"
+                " WHERE room_id = ? AND id < ? ORDER BY id DESC LIMIT ?",
+                room_id, before_id, limit));
+        }
+
+        std::vector<Message> messages;
+        while (messgaes_rs->next()) {
+            messages.push_back(Message::from_result_set(messgaes_rs.get()));
+        }
+
+        return create_json_response(
+            http::status::ok, ctx.version, ctx.keep_alive,
+            json::value_from(ApiResponse<std::vector<Message>>{
+                StatusCode::Success, "Chat messages fetched successfully", messages}));
+
+    } catch (const std::exception& e) {
+        spdlog::error("Exception during fetching chat messages: {}", e.what());
+        return error_resp(ctx, StatusCode::InternalServerError, " Server Error");
+    }
 }
 
 http::response<http::string_body> RequestHandler::error_resp(const ReqContext& ctx, StatusCode code,

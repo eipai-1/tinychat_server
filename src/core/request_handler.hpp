@@ -3,6 +3,7 @@
 #include <string>
 #include <optional>
 #include <vector>
+#include <map>
 
 #include <cstddef>
 #include <boost/json.hpp>
@@ -91,7 +92,7 @@ public:
         } else if (req.target() == "/api/private_room") {
             return create_p_room(std::move(req));
         } else if (req.target().starts_with("/api/rooms/")) {
-            return handle_chat_room(std::move(req));
+            return handle_chat_room(std::move(req), ctx);
         } else if (req.target() == "/me/rooms") {
             return query_rooms(ctx);
         } else if (req.target().starts_with("/assets")) {
@@ -115,6 +116,20 @@ private:
     // 例：/api/rooms/some_room_uuid/members
     // -----0----1----------2----------3---
     static std::string_view extract_target_param(std::string_view target, std::size_t index);
+
+    /*
+     * @brief 提取请求路径参数中的查询参数
+     *
+     * @param req_param *一个* 请求路径参数(messages?limit=50&after=123456 正确！)，
+     * 不是多个！(/room/123/messages?limit=50 错误！)
+     *
+     * @return 返回查询参数的map<参数名：参数值>，均为字符串类型
+     *
+     * @note 例如 对于"messages?limit=50&after=123456" 返回 {"limit" : "50", "afrer": "123456"}
+     * 路径中各种参数中不能有特殊字符！'?'，'&', '='
+     */
+    static std::map<std::string, std::string> extract_target_query_params(
+        std::string_view req_param);
 
     static std::string bytes_to_hex(const unsigned char* bytes, std::size_t len);
 
@@ -274,7 +289,8 @@ private:
     }
 
     template <typename Allocator>
-    static http::message_generator handle_chat_room(api_request<Allocator>&& req) {
+    static http::message_generator handle_chat_room(api_request<Allocator>&& req,
+                                                    const ReqContext& ctx) {
         try {
             std::string_view target = req.target();
             u64 room_id = std::stoull(std::string(extract_target_param(target, 2)));
@@ -286,6 +302,8 @@ private:
                 }
             } else if (room_verb == "member") {
                 return invite_member(std::move(req), room_id);
+            } else if (room_verb.starts_with("message")) {
+                return fetch_chat_messages(ctx, room_verb, room_id);
             } else {
                 return bad_request(std::move(req), " target not found");
             }
@@ -400,6 +418,9 @@ private:
             json::value_from(ApiResponse<std::nullptr_t>{
                 StatusCode::Success, "Invitee successfully added to the group", nullptr}));
     }
+
+    static http::message_generator fetch_chat_messages(const ReqContext& ctx,
+                                                       std::string_view req_param, u64 room_id);
 
     template <typename Allocator>
     static http::message_generator bad_request(api_request<Allocator>&& req,

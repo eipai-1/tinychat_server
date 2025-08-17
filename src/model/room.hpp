@@ -11,7 +11,7 @@ namespace tcs {
 namespace model {
 struct Room {
     u64 id;
-    i8 type;
+    int type;
     std::string name;
     std::string description;
     std::string avatar_url;
@@ -22,7 +22,7 @@ struct Room {
     static Room from_result_set(sql::ResultSet* rs) {
         Room room;
         room.id = rs->getUInt64("id");
-        room.type = static_cast<i8>(rs->getInt("type"));
+        room.type = rs->getInt("type");
         room.name = rs->getString("name");
         room.description = rs->getString("description");
         room.avatar_url = rs->getString("avatar_url");
