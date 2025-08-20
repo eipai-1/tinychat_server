@@ -185,20 +185,19 @@ http::message_generator RequestHandler::fetch_chat_messages(const ReqContext& ct
         if (query_params.count("before")) {
             before_id = std::stoull(query_params["before"]);
         }
-        before_id = std::stoull(query_params["before"]);
         int limit = std::stoi(query_params["limit"]);
         if (limit <= 0 || limit > 100) {
             limit = 50;  // 默认限制为50条
         }
         std::unique_ptr<sql::ResultSet> messgaes_rs;
         if (before_id == 0) {
-            messgaes_rs = std::make_unique<sql::ResultSet>(conn.execute_query(
+            messgaes_rs = std::unique_ptr<sql::ResultSet>(conn.execute_query(
                 "SELECT id, room_id, sender_id, content_type, content, created_at FROM messages"
                 " WHERE room_id = ? ORDER BY id DESC LIMIT ?",
                 room_id, limit));
 
         } else {
-            messgaes_rs = std::make_unique<sql::ResultSet>(conn.execute_query(
+            messgaes_rs = std::unique_ptr<sql::ResultSet>(conn.execute_query(
                 "SELECT id, room_id, sender_id, content_type, content, created_at FROM messages"
                 " WHERE room_id = ? AND id < ? ORDER BY id DESC LIMIT ?",
                 room_id, before_id, limit));
