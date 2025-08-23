@@ -32,10 +32,5 @@ SqlConnRAII::~SqlConnRAII() {
         spdlog::warn("Sql in SqlConnRAII is invalid. Not returning to pool");
     }
 }
-
-void SqlConnRAII::bind_all_param(PrepStmt* pstmt, int idx, const std::string& str) {
-    pstmt->setString(idx, str);
-}
-
 }  // namespace db
 }  // namespace tcs

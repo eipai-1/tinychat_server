@@ -1,6 +1,7 @@
 #include <string>
 #include <chrono>
 #include <filesystem>
+#include <sstream>
 
 #include <boost/json.hpp>
 #include "jwt-cpp/jwt.h"
@@ -129,6 +130,20 @@ std::map<std::string, std::string> RequestHandler::extract_target_query_params(
     }
 
     return params;
+}
+
+std::string RequestHandler::getCurUTCTime() {
+    std::stringstream ss;
+    auto now = std::chrono::system_clock::now();
+    auto seconds = std::chrono::system_clock::to_time_t(now);
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+
+    ss << std::put_time(std::gmtime(&seconds), "%Y-%m-%d %H:%M:%S");
+
+    // 毫秒部分 用0补齐3位
+    ss << '.' << std::setfill('0') << std::setw(3) << ms.count();
+
+    return ss.str();
 }
 
 std::string RequestHandler::bytes_to_hex(const unsigned char* bytes, std::size_t len) {

@@ -110,6 +110,10 @@ public:
         static boost::uuids::random_generator uuid_gen_;
         return boost::uuids::to_string(uuid_gen_());
     }
+    /*
+     * @brief 返回精确到毫秒的UTC时间字符串，格式“%Y-%m-%d %H:%M:%S.000”(后三位为毫秒)
+     */
+    static std::string getCurUTCTime();
 
 private:
     // 提取请求路径参数

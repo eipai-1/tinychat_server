@@ -35,9 +35,10 @@ void WebsocketSession::on_read(beast::error_code ec, std::size_t bytes_transferr
     }
 
     // todo: 流量控制
+    std::string msg_copy = beast::buffers_to_string(buffer_.data());
+    buffer_.consume(buffer_.size());
 
-    pool::ThreadPool::get().addTask(WSHandler::handle_message,
-                                    beast::buffers_to_string(buffer_.data()), user_claims_);
+    pool::ThreadPool::get().addTask(WSHandler::handle_message, msg_copy, user_claims_);
     // WSHandler::handle_message(beast::buffers_to_string(buffer_.data()), user_id_);
 
     do_read();

@@ -73,5 +73,24 @@ inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
                              {"content", msg.content}};
 }
 
+template <typename T>
+struct WSMsg {
+    utils::WSType type;
+    T data;
+};
+
+template <typename T>
+inline void tag_invoke(json::value_from_tag, json::value& jv, WSMsg<T> msg) {
+    jv = json::object{{"type", utils::ws_type_to_string(msg.type)},
+                      {"data", json::value_from(msg.data)}};
+}
+
+template <typename T>
+inline WSMsg<T> tag_invoke(json::value_to_tag<WSMsg<T>>, const json::value& jv) {
+    const json::object& obj = jv.as_object();
+    return WSMsg<T>{.type = utils::string_to_ws_type((obj.at("type")).as_string().c_str()),
+                    .data = json::value_to<T>(obj.at("data"))};
+}
+
 }  // namespace model
 }  // namespace tcs

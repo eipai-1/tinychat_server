@@ -29,7 +29,9 @@ public:
 
     void rollback() { sql_->rollback(); }
 
-    void bind_all_param(PrepStmt* pstmt, int idx, const std::string& str);
+    void bind_all_param(PrepStmt* pstmt, int idx, const std::string& str) {
+        pstmt->setString(idx, str);
+    }
 
     void bind_all_param(PrepStmt* pstmt, int idx, int value) { pstmt->setInt(idx, value); }
 

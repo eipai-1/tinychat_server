@@ -1,4 +1,7 @@
 #pragma once
+#include <string_view>
+#include <map>
+
 #include <boost/json.hpp>
 
 #include "utils/types.hpp"
@@ -56,6 +59,37 @@ enum class ServerRespType : int {
 inline void tag_invoke(boost::json::value_from_tag, boost::json::value& jv,
                        const ServerRespType& type) {
     jv = static_cast<int>(type);
+}
+
+enum class WSType : int {
+    PrivateMsg = 1,
+    GroupMsg = 2,
+    MsgSent = 3,
+    Invalid = 0,
+};
+inline std::string_view ws_type_to_string(WSType type) {
+    switch (type) {
+        case WSType::PrivateMsg:
+            return "private_message";
+        case WSType::GroupMsg:
+            return "group_message";
+        case WSType::MsgSent:
+            return "message_sent";
+        default:
+            return "invalid";
+    }
+}
+inline WSType string_to_ws_type(std::string_view type) {
+    static const std::map<std::string_view, WSType> type_map = {
+        {"private_message", WSType::PrivateMsg},
+        {"group_message", WSType::GroupMsg},
+        {"message_sent", WSType::MsgSent},
+    };
+    auto it = type_map.find(type);
+    if (it != type_map.end()) {
+        return it->second;
+    }
+    return WSType::Invalid;
 }
 
 }  // namespace utils

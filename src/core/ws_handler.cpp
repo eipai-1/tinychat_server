@@ -4,6 +4,7 @@
 #include <spdlog/spdlog.h>
 
 #include "model/ws_models.hpp"
+#include "model/message.hpp"
 #include "core/request_handler.hpp"
 #include "core/ws_handler.hpp"
 #include "core/ws_session_mgr.hpp"
@@ -18,9 +19,15 @@ namespace utils = tcs::utils;
 using SqlConnRAII = tcs::db::SqlConnRAII;
 using SnowFlake = tcs::utils::SnowFlake;
 using UserClaims = tcs::model::UserClaims;
+using Message = tcs::model::Message;
+using WSType = tcs::utils::WSType;
+
+template <typename T>
+using WSMsg = tcs::model::WSMsg<T>;
 
 namespace tcs {
 namespace core {
+
 void WSHandler::handle_message(const std::string& msg, UserClaims user_claims) {
     SqlConnRAII conn;
     conn.begin_transaction();
@@ -38,9 +45,9 @@ void WSHandler::handle_message(const std::string& msg, UserClaims user_claims) {
             throw std::runtime_error("Missing or invalid 'type' field in WebSocket message");
         }
 
-        std::string type = obj.at("type").as_string().c_str();
+        std::string_view type = obj.at("type").as_string().c_str();
 
-        if (type == "private_message") {
+        if (type == utils::ws_type_to_string(WSType::PrivateMsg)) {
             // todo: 好友检测
 
             model::ClientPrivateMsg private_msg =
@@ -59,12 +66,23 @@ void WSHandler::handle_message(const std::string& msg, UserClaims user_claims) {
                         .type = utils::ServerRespType::PermissionDenied, .data = nullptr})));
                 return;
             }
+            // 权限检测通过
 
             u64 msg_id = SnowFlake::next_id();
+            std::string created_at = RequestHandler::getCurUTCTime();
+            Message msg = {.id = msg_id,
+                           .room_id = private_msg.room_id,
+                           .sender_id = user_claims.id,
+                           // TODO:
+                           // 支持其他消息类型
+                           .content_type = 0,
+                           .content = private_msg.content,
+                           .created_at = created_at};
 
             int updated_row1 = conn.execute_update(
-                "INSERT INTO messages (id, room_id, sender_id, content) VALUES (?, ?, ?, ?)",
-                msg_id, private_msg.room_id, user_claims.id, private_msg.content);
+                "INSERT INTO messages (id, room_id, sender_id, content_type, content, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                msg.id, msg.room_id, msg.sender_id, msg.content_type, msg.content, msg.created_at);
             if (updated_row1 != 1) {
                 throw std::runtime_error(
                     std::string("Failed to insert private message sent by \"") +
@@ -86,22 +104,18 @@ void WSHandler::handle_message(const std::string& msg, UserClaims user_claims) {
             conn.commit();
             spdlog::debug("Transaction committed for private message {}", msg_id);
 
-            model::ServerRespMsg<model::PrivateMsgToSend> private_msg_to_send = {
-                .type = utils::ServerRespType::PMsgToSend,
-                .data = model::PrivateMsgToSend{.private_room_id = private_msg.room_id,
-                                                .content = private_msg.content}};
-
-            model::ServerRespMsg<std::nullptr_t> msg_sent_info = {
-                .type = utils::ServerRespType::MsgSentInfo, .data = nullptr};
+            WSMsg<Message> resp = {
+                .type = WSType::PrivateMsg,
+                .data = msg,
+            };
 
             WSSessionMgr::get().write_to(private_msg.other_user_id,
-                                         json::serialize(json::value_from(private_msg_to_send)));
+                                         json::serialize(json::value_from(resp)));
 
             // 私聊消息单独回一条送达信息
-            WSSessionMgr::get().write_to(user_claims.id,
-                                         json::serialize(json::value_from(msg_sent_info)));
+            WSSessionMgr::get().write_to(user_claims.id, json::serialize(json::value_from(resp)));
 
-        } else if (type == "group_message") {
+        } else if (type == utils::ws_type_to_string(WSType::GroupMsg)) {
             model::ClientGroupMsg group_msg = json::value_to<model::ClientGroupMsg>(jv.at("data"));
 
             // 权限检测，必须为房间成员才能发送消息
@@ -117,11 +131,23 @@ void WSHandler::handle_message(const std::string& msg, UserClaims user_claims) {
                         .type = utils::ServerRespType::PermissionDenied, .data = nullptr})));
                 return;
             }
+            // 权限检测通过
 
             u64 msg_id = SnowFlake::next_id();
+            std::string created_at = RequestHandler::getCurUTCTime();
+
+            model::Message msg{.id = msg_id,
+                               .room_id = group_msg.room_id,
+                               .sender_id = user_claims.id,
+                               // TODO:
+                               .content_type = 0,
+                               .content = group_msg.content,
+                               .created_at = created_at};
+
             int updated_row1 = conn.execute_update(
-                "INSERT INTO messages (id, room_id, sender_id, content) VALUES (?, ?, ?, ?)",
-                msg_id, group_msg.room_id, user_claims.id, group_msg.content);
+                "INSERT INTO messages (id, room_id, sender_id, content_type, content, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                msg.id, msg.room_id, msg.sender_id, msg.content_type, msg.content, msg.created_at);
 
             if (updated_row1 != 1) {
                 throw std::runtime_error(
@@ -142,16 +168,15 @@ void WSHandler::handle_message(const std::string& msg, UserClaims user_claims) {
             conn.commit();
             spdlog::debug("Transaction committed for group message {}", msg_id);
 
-            model::ServerRespMsg<model::GroupMsgToSend> group_msg_to_send = {
-                .type = utils::ServerRespType::GMsgToSend,
-                .data = model::GroupMsgToSend{.room_id = group_msg.room_id,
-                                              .sender_id = user_claims.id,
-                                              .content = group_msg.content}};
+            WSMsg<Message> resp{
+                .type = WSType::GroupMsg,
+                .data = msg,
+            };
 
             // 群聊消息广播给所有群成员
             // 包括发送者，所以不需要单独回送送达信息
             WSSessionMgr::get().write_to_room(group_msg.room_id,
-                                              json::serialize(json::value_from(group_msg_to_send)));
+                                              json::serialize(json::value_from(resp)));
         }
     } catch (const std::exception& e) {
         conn.rollback();
