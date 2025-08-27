@@ -29,6 +29,7 @@ private:
     std::mutex mtx_;
     std::unique_ptr<std::counting_semaphore<SEMAPHORE_MAX_VALUE>> smph_;
     int max_conn_;
+    static MySQL_Driver* m_driver;
     std::queue<sql::Connection*> conn_queue_;
     Connection* getSql();
 

@@ -7,6 +7,8 @@
 #include <iostream>
 #include <filesystem>
 #include <memory>
+#include <mutex>
+#include <atomic>
 
 #include "utils/types.hpp"
 
@@ -169,7 +171,7 @@ public:
     static void init(const std::string& filename);
 
     static const AppConfig& get() {
-        if (!instance_ptr_) {
+        if (!instance_ptr_.load(std::memory_order_acquire)) {
             throw std::runtime_error("AppConfig has not been initialized. Call init() first.");
         }
         return *instance_ptr_;
@@ -183,7 +185,10 @@ private:
     explicit AppConfig() = default;
     Server server_;
     Database database_;
-    static std::unique_ptr<AppConfig> instance_ptr_;
+    static std::once_flag init_flag_;
+
+    // 由os负责释放
+    static std::atomic<AppConfig*> instance_ptr_;
 };
 }  // namespace utils
 }  // namespace tcs

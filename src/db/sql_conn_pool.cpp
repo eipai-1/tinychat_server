@@ -3,11 +3,13 @@
 #include <stdexcept>
 #include <memory>
 #include <mutex>
+#include <spdlog/spdlog.h>
 
 using AppConfig = tcs::utils::AppConfig;
 
 namespace tcs {
 namespace db {
+MySQL_Driver* SqlConnPool::m_driver = nullptr;
 
 SqlConnPool* SqlConnPool::instance() {
     static SqlConnPool pool;
@@ -23,7 +25,7 @@ Connection* SqlConnPool::getConn() {
         return getSql();
     }
     // 通过日志判断连接池负载
-    std::cout << "Sql connect pool is busy..." << std::endl;
+    spdlog::warn("Sql connect pool is busy, max size: {}", max_conn_);
 
     smph_->acquire();
     return getSql();
@@ -33,7 +35,7 @@ void SqlConnPool::init() {
     max_conn_ = AppConfig::get().database().sqlconnpool_max_size();
     smph_ = std::make_unique<std::counting_semaphore<SEMAPHORE_MAX_VALUE>>(
         AppConfig::get().database().sqlconnpool_max_size());
-    MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
+    m_driver = sql::mysql::get_mysql_driver_instance();
 
     sql::ConnectOptionsMap connection_properties;
     connection_properties["hostName"] = AppConfig::get().database().server();
@@ -47,13 +49,13 @@ void SqlConnPool::init() {
     //     std::cout << "Using MySQL Plugin Dir: " << MYSQL_PLUGIN_DIR << std::endl;
     // #endif
 
-    if (!driver) {
-        std::cerr << "MySQL driver instance is null!" << std::endl;
+    if (!m_driver) {
+        spdlog::error("MySQL driver instance is null!");
         throw std::runtime_error("MySQL driver instance is null!");
     }
 
     for (int i{}; i < max_conn_; i++) {
-        Connection* sql(driver->connect(connection_properties));
+        Connection* sql(m_driver->connect(connection_properties));
         conn_queue_.push(sql);
     }
 }
@@ -90,7 +92,7 @@ Connection* SqlConnPool::getSql() {
         if (conn_queue_.empty()) {
             // 这种情况理论上不该发生，因为 acquire() 成功了
             // 可以选择抛出异常或创建一个新连接
-            std::cerr << "CRITICAL: Semaphore acquired but connection queue is empty!" << std::endl;
+            spdlog::error("In SqlConnPool: Semaphore acquired but connection queue is empty!");
             // 这里我们选择抛出异常，因为它指示了一个严重的同步问题
             throw std::runtime_error("Connection pool synchronization error.");
         }
@@ -101,14 +103,9 @@ Connection* SqlConnPool::getSql() {
         return sql;
     } else {
         // 如果连接失效，重新创建一个新的连接
-        std::cerr << "Connection is invalid, creating a new one." << std::endl;
-        MySQL_Driver* driver = sql::mysql::get_mysql_driver_instance();
-        if (!driver) {
-            throw std::runtime_error("MySQL driver instance is null!");
-        }
-        sql = driver->connect(AppConfig::get().database().server(),
-                              AppConfig::get().database().user(),
-                              AppConfig::get().database().passwd());
+        sql->reconnect();
+        spdlog::warn("A SQL connection is invalid. Reconnected");
+        // sql = driver->connect();
         return sql;
     }
 }

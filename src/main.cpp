@@ -1,6 +1,10 @@
 #include "tinychat_server.hpp"
 #include <iostream>
 
+/*
+ * 需首先加载配置文件
+ */
+
 int main(int argc, char* argv[]) {
 #ifdef NDEBUG
     if (argc < 2) {
