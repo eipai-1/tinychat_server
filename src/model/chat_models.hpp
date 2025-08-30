@@ -4,6 +4,7 @@
 #include <vector>
 
 #include <boost/json.hpp>
+#include <utils/types.hpp>
 
 namespace tcs {
 namespace model {
@@ -15,7 +16,7 @@ struct CreateGRoomReq {
 inline CreateGRoomReq tag_invoke(boost::json::value_to_tag<CreateGRoomReq>,
                                  const boost::json::value& jv) {
     const boost::json::object obj = jv.as_object();
-    return CreateGRoomReq{.name = json::value_to<std::string>(obj.at("name"))};
+    return CreateGRoomReq{.name = boost::json::value_to<std::string>(obj.at("name"))};
 }
 
 struct CreateGRoomResp {
@@ -33,7 +34,8 @@ struct CreatePRoomReq {
 inline CreatePRoomReq tag_invoke(boost::json::value_to_tag<CreatePRoomReq>,
                                  const boost::json::value& jv) {
     const boost::json::object obj = jv.as_object();
-    return CreatePRoomReq{.other_id = std::stoull(json::value_to<std::string>(obj.at("other_id")))};
+    return CreatePRoomReq{.other_id =
+                              std::stoull(boost::json::value_to<std::string>(obj.at("other_id")))};
 }
 
 struct CreatePRoomResp {
@@ -52,7 +54,7 @@ inline GRoomInvtReq tag_invoke(boost::json::value_to_tag<GRoomInvtReq>,
                                const boost::json::value& jv) {
     const boost::json::object obj = jv.as_object();
     return GRoomInvtReq{
-        .invitee_id = std::stoull(json::value_to<std::string>(obj.at("invitee_id"))),
+        .invitee_id = std::stoull(boost::json::value_to<std::string>(obj.at("invitee_id"))),
     };
 }
 
