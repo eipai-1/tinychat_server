@@ -10,18 +10,6 @@ SqlConnRAII::SqlConnRAII() : pool_(nullptr), sql_(nullptr) {
     sql_ = pool_->getConn();
 }
 
-/*
- * @brief 确保sql连接有效
- *
- */
-Connection* SqlConnRAII::getSql() {
-    if (!sql_->isValid()) {
-        spdlog::warn("Sql in SqlConnRAII is invalid. Getting a new Sql");
-        sql_ = pool_->getConn();
-    }
-    return sql_;
-}
-
 SqlConnRAII::~SqlConnRAII() {
     if (sql_->isValid()) {
         if (!sql_->getAutoCommit()) {
